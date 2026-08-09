@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+# pnpm 10 は既定で postinstall を実行しない。Git hooks のバイナリ配置に必要なものだけ許可する。
+onlyBuiltDependencies:
+  - lefthook

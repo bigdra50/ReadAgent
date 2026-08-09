@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# test / coverage
+coverage/
+.vitest/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# editor / OS
+.DS_Store
+.idea/
+*.swp
+
+# Claude Code local overrides
+.claude/settings.local.json
+
+# ReadAgent local data (書籍・ノートの実データはコミットしない)
+.readagent/
+data/
+*.pdf
+!docs/fixtures/**/*.pdf

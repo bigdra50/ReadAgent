@@ -1,0 +1,33 @@
+{
+  "name": "readagent",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PDF\u3092\u8aad\u307f\u306a\u304c\u3089\u9078\u629e\u7b87\u6240\u3092Claude Agent\u3068\u6df1\u6398\u308a\u3057\u3001\u5bfe\u8a71\u5185\u5bb9\u304c\u8aad\u66f8\u30ce\u30fc\u30c8\u306b\u81ea\u52d5\u53cd\u6620\u3055\u308c\u308b\u8aad\u66f8\u30a8\u30fc\u30b8\u30a7\u30f3\u30c8\u30c4\u30fc\u30eb",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "tsc --build --pretty && pnpm -r run typecheck",
+    "typecheck:clean": "tsc --build --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome check --error-on-warnings .",
+    "format": "biome check --write --error-on-warnings .",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "prepare": "lefthook install || true"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.7",
+    "@commitlint/cli": "21.2.1",
+    "@commitlint/config-conventional": "21.2.0",
+    "@types/node": "22.20.1",
+    "@vitest/coverage-v8": "4.1.10",
+    "lefthook": "2.1.10",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}
