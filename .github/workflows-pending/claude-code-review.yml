@@ -1,0 +1,49 @@
+# PR を開いた／更新したときの自動レビュー。
+# CLAUDE.md の規約と docs/ の要件に照らしてレビューさせる。
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    # Claude 自身が作った PR の自己レビューは無駄なのでスキップ
+    if: github.event.pull_request.user.login != 'claude[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Token 未設定なら何もしない
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::CLAUDE_CODE_OAUTH_TOKEN が未設定のためスキップしました"
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        if: env.HAS_TOKEN == 'true'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: |
+            この PR をレビューしてください。CLAUDE.md の規約と docs/requirements.md の要件を前提とします。
+            観点（重要度順）:
+            1. 正しさ: 抜けている境界条件、握りつぶされたエラー、キャンセル漏れの非同期処理
+            2. レイヤ違反: packages/core が UI / SDK / fs に依存していないか
+            3. テスト: 新しい分岐にテストがあるか。テストが実装の写経になっていないか
+            4. 過剰実装: 要件にない機能・抽象を先回りして作っていないか
+            指摘は具体的な行に紐づけ、確信のあるものだけを挙げてください。褒めるだけのコメントは不要です。
+          claude_args: |
+            --allowedTools "Bash(pnpm install),Bash(pnpm run:*),Bash(pnpm exec:*),Bash(git diff:*),Bash(git log:*)"
