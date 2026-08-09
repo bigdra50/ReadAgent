@@ -56,9 +56,16 @@ docs/           要件・アーキテクチャ・ロードマップ・ADR
 
 ## CI
 
-`.github/workflows/ci.yml` が push / PR で lint・型チェック・テスト・ビルドを実行します。
+> **要有効化**: ワークフローは現在 `.github/workflows-pending/` にあります。
+> `.github/workflows/` へ移動すると有効になります（手順は
+> [.github/workflows-pending/README.md](.github/workflows-pending/README.md)）。
+> 作成元の Claude Code セッションに `workflows` 権限が無く、直接置けなかったためです。
 
-`@claude` メンションによる応答（`claude.yml`）と PR の自動レビュー（`claude-code-review.yml`）は、
-リポジトリの Secrets に `CLAUDE_CODE_OAUTH_TOKEN` を登録すると有効になります。
+- `ci.yml` — push / PR で lint・型チェック・テスト・ビルド。PR ではコミットメッセージも検証
+- `claude.yml` — Issue / PR で `@claude` メンションに応答
+- `claude-code-review.yml` — PR の自動レビュー
+
+`claude.yml` と `claude-code-review.yml` は、リポジトリの Secrets に
+`CLAUDE_CODE_OAUTH_TOKEN` を登録すると有効になります。
 トークンはローカルで `claude setup-token` を実行して発行してください（Claude サブスクリプションを利用）。
 未設定の場合、これらのワークフローはスキップされ CI は赤くなりません。

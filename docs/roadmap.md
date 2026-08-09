@@ -7,7 +7,7 @@
 
 - [x] pnpm ワークスペース + TypeScript + Biome + Vitest
 - [x] `pnpm run verify`（lint / typecheck / test / build）
-- [x] GitHub Actions による CI と Claude Code Action
+- [x] GitHub Actions による CI と Claude Code Action（`.github/workflows-pending/` から移動して有効化）
 - [x] Claude Code 用ハーネス（`CLAUDE.md` / hooks / slash commands / subagents）
 - [x] `packages/core`: ドメインモデルと設定の階層解決
 
