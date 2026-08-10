@@ -1,0 +1,27 @@
+name: 機能
+description: 実装したい機能・改善
+labels: [feature]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 達成したいこと
+      description: ユーザー視点で何ができるようになるか
+    validations:
+      required: true
+  - type: input
+    id: requirement
+    attributes:
+      label: 対応する要件
+      description: "docs/requirements.md の節番号（例: 3.3 読書ノート機能）"
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件
+      description: これが満たされたら閉じてよい、と言える条件を箇条書きで
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足 / 検討事項
