@@ -26,6 +26,11 @@ export interface BookHandle {
   readonly ref: BookRef;
   readonly config: NoteConfig;
   readonly notes: NoteStore;
+  /**
+   * 別の位置のノートを引く。UI から notePath を一時上書きしたときに使う。
+   * パスの検証は createFileNoteStore（resolveNotePath）が行う。
+   */
+  notesAt(notePath: string): NoteStore;
   load(): Promise<LoadedDocument>;
 }
 
@@ -67,14 +72,25 @@ function createHandle(path: string): Promise<BookHandle> {
     const title = basename(path, extname(path));
     let cached: Promise<LoadedDocument> | null = null;
 
+    // 同じ位置のノートには同じ保存先を使う。別々に作ると追記の直列化が効かない
+    const stores = new Map<string, NoteStore>();
+    const notesAt = (notePath: string): NoteStore => {
+      const existing = stores.get(notePath);
+      if (existing) return existing;
+      const store = createFileNoteStore({
+        baseDir: resolve(path, '..'),
+        notePath,
+        bookTitle: title,
+      });
+      stores.set(notePath, store);
+      return store;
+    };
+
     return {
       ref: { id: bookId(path), title },
       config,
-      notes: createFileNoteStore({
-        baseDir: resolve(path, '..'),
-        notePath: config.notePath,
-        bookTitle: title,
-      }),
+      notes: notesAt(config.notePath),
+      notesAt,
       load: () => {
         // 抽出は重い。開いた書籍だけを、1度だけ読む
         cached ??= (async () => {

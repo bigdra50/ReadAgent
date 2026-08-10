@@ -1,8 +1,8 @@
 import type { AgentEvent } from '@readagent/agent';
-import type { Granularity, UpdateMode } from '@readagent/core';
+import type { NoteConfig } from '@readagent/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { streamChat } from '../lib/chat';
-import { type NoteOverrides, NoteSettings } from './NoteSettings';
+import { type RequestOverrides, RequestSettings } from './RequestSettings';
 import type { SelectionRange } from './TextLayer';
 
 interface Props {
@@ -12,8 +12,8 @@ interface Props {
   /** ノート更新の状態。ヘッダーに控えめに出す（要件 4） */
   readonly onNoteStatus: (status: 'idle' | 'updating' | 'failed') => void;
   readonly onNoteUpdated: () => void;
-  /** 書籍までで解決済みのノート設定。一時上書きの出発点 */
-  readonly noteConfig: { updateMode: UpdateMode; granularity: Granularity } | null;
+  /** 書籍までで解決済みの設定。一時上書きの出発点 */
+  readonly noteConfig: NoteConfig | null;
 }
 
 interface ToolRun {
@@ -38,7 +38,7 @@ export function ChatPane({
   const [answer, setAnswer] = useState('');
   const [tools, setTools] = useState<ToolRun[]>([]);
   const [status, setStatus] = useState<'idle' | 'streaming' | 'error'>('idle');
-  const [overrides, setOverrides] = useState<NoteOverrides>({});
+  const [overrides, setOverrides] = useState<RequestOverrides>({});
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -94,12 +94,17 @@ export function ChatPane({
     onNoteStatus('idle');
 
     try {
+      // モデルは設定の一部ではないので、送る形を分ける
+      const { model: rawModel, ...config } = overrides;
+      const model = rawModel?.trim();
+
       const request = {
         page: selection.page,
         start: selection.start,
         end: selection.end,
         ...(question.trim() ? { question: question.trim() } : {}),
-        ...(Object.keys(overrides).length > 0 ? { config: overrides } : {}),
+        ...(model ? { model } : {}),
+        ...(Object.keys(config).length > 0 ? { config } : {}),
       };
       for await (const event of streamChat(bookId, request, controller.signal)) {
         applyEvent(event);
@@ -164,7 +169,7 @@ export function ChatPane({
         </ul>
       )}
 
-      <NoteSettings resolved={noteConfig} overrides={overrides} onChange={setOverrides} />
+      <RequestSettings resolved={noteConfig} overrides={overrides} onChange={setOverrides} />
 
       {answer && <div className="answer">{answer}</div>}
       {status === 'streaming' && !answer && <p className="muted">考えています…</p>}

@@ -249,3 +249,72 @@ describe('GET /api/books/:id/notes', () => {
     await close(server);
   });
 });
+
+describe('一時上書きの適用範囲', () => {
+  it('モデルを指定するとエージェントに渡す', async () => {
+    let seenModel: string | undefined;
+    const server = createReadAgentServer({
+      library: bookLibrary(),
+      ask: (input) => {
+        seenModel = input.model;
+        return (async function* (): AsyncGenerator<AgentEvent> {
+          yield { type: 'done', ok: true };
+        })();
+      },
+    });
+    const base = await listen(server);
+
+    await fetch(`${base}/api/books/jit/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ page: 1, start: 0, end: 3, model: 'sonnet' }),
+    }).then((r) => r.text());
+
+    expect(seenModel).toBe('sonnet');
+    await close(server);
+  });
+
+  it('空のモデル指定は 400 で弾く', async () => {
+    const server = createReadAgentServer({ library: bookLibrary() });
+    const base = await listen(server);
+
+    const response = await fetch(`${base}/api/books/jit/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ page: 1, start: 0, end: 3, model: '   ' }),
+    });
+
+    expect(response.status).toBe(400);
+    await close(server);
+  });
+
+  it('文脈の上限を上書きできる', async () => {
+    let budget: { maxContextChars: number } | undefined;
+    const server = createReadAgentServer({
+      library: bookLibrary(),
+      ask: (input) => {
+        budget = input.budget;
+        return (async function* (): AsyncGenerator<AgentEvent> {
+          yield { type: 'done', ok: true };
+        })();
+      },
+    });
+    const base = await listen(server);
+
+    await fetch(`${base}/api/books/jit/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ page: 1, start: 0, end: 3, config: { maxContextChars: 1234 } }),
+    }).then((r) => r.text());
+
+    expect(budget?.maxContextChars).toBe(1234);
+    await close(server);
+  });
+
+  it('ノートの位置を上書きすると、その位置の保存先を使う', () => {
+    const { notePath } = buildContext(
+      pageText,
+      { page: 1, start: 0, end: 5, config: { notePath: 'chapter3.md' } },
+      { notePath: 'notes.md' },
+    );
+
+    expect(notePath).toBe('chapter3.md');
+  });
+});
