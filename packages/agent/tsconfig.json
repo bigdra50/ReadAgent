@@ -7,9 +7,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/pdf" },
-    { "path": "../../packages/agent" }
-  ]
+  "references": [{ "path": "../core" }, { "path": "../pdf" }]
 }

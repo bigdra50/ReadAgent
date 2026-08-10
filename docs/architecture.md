@@ -47,7 +47,7 @@
 | `packages/pdf` | PDFのテキスト抽出・目次抽出、引用の組み立て | 実装済み（最小） |
 | `apps/server` | ローカルHTTPサーバー。本文の提供と、今後のエージェント中継 | 実装済み（最小） |
 | `apps/web` | 読書UI（分割ビュー・テキストレイヤ・選択） | 実装済み（骨格） |
-| `packages/agent` | Claude Agent SDK 連携、カスタムツール定義 | 未着手（Phase 1 の残り） |
+| `packages/agent` | Claude Agent SDK 連携、プロンプト組み立て、イベント変換 | 実装済み（最小） |
 | `packages/notes` | Markdown ノートの読み書きと双方向リンク | 未着手（Phase 2） |
 
 パッケージは**必要になった時点で**作ります。空のパッケージを先に並べません。

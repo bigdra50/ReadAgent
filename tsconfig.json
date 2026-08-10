@@ -1,8 +1,17 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/pdf" },
-    { "path": "./apps/server" }
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/pdf"
+    },
+    {
+      "path": "./packages/agent"
+    },
+    {
+      "path": "./apps/server"
+    }
   ]
 }

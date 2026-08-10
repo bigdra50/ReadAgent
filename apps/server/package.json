@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@readagent/core": "workspace:*",
-    "@readagent/pdf": "workspace:*"
+    "@readagent/pdf": "workspace:*",
+    "@readagent/agent": "workspace:*"
   }
 }

@@ -3,6 +3,7 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { useEffect, useRef, useState } from 'react';
+import { ChatPane } from './components/ChatPane';
 import { SplitView } from './components/SplitView';
 import { type SelectionRange, TextLayer } from './components/TextLayer';
 import {
@@ -119,21 +120,7 @@ export function App() {
           </div>
         </>
       }
-      side={
-        <>
-          <h2>選択範囲</h2>
-          {selection ? (
-            <>
-              <p className="muted">
-                p.{selection.page} [{selection.start}, {selection.end})
-              </p>
-              <blockquote>{quote}</blockquote>
-            </>
-          ) : (
-            <p className="muted">本文を選択すると、ここに引用が出ます</p>
-          )}
-        </>
-      }
+      side={<ChatPane selection={selection} quote={quote} />}
     />
   );
 }
