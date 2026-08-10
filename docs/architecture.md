@@ -73,6 +73,7 @@
 | ノートの保存単位 | 書籍ごとに1つの Markdown へ追記 | [ADR-0006](adr/0006-note-storage.md) |
 | 設定の層 | グローバル JSON → 書籍の `.readagent.json` → 環境変数 | 要件 3.4 / `apps/server/src/config.ts` |
 | 複数書籍と書籍ID | ディレクトリを見る / IDは絶対パス由来 | [ADR-0008](adr/0008-multiple-books.md) |
+| ノートの再構成 | 書き換えず、まとめを追記する | [ADR-0009](adr/0009-note-reorganization.md) |
 | エージェントの権限 | 読み取り専用の Web ツールとノート更新のみ | [ADR-0007](adr/0007-agent-permissions.md) |
 | 実行形態 | Phase 1 はローカル Node サーバー + ブラウザ。シェルは Phase 3 以降に再評価 | [ADR-0004](adr/0004-runtime-shell.md) |
 | PDF | `pdfjs-dist` でテキスト抽出とテキストレイヤ描画 | [ADR-0004](adr/0004-runtime-shell.md) |

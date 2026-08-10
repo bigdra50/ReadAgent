@@ -152,3 +152,79 @@ export function parseEntries(markdown: string): ParsedNoteEntry[] {
 
   return entries;
 }
+
+export interface NoteSummaryDraft {
+  /** まとめの対象範囲。ページ番号の下限と上限 */
+  readonly fromPage: number;
+  readonly toPage: number;
+  /** まとめ本文（Mermaid を含んでよい） */
+  readonly body: string;
+  readonly tags?: readonly string[];
+  readonly createdAt: string;
+}
+
+export interface ParsedNoteSummary {
+  readonly fromPage: number;
+  readonly toPage: number;
+  readonly body: string;
+  readonly createdAt?: string;
+}
+
+const SUMMARY_PATTERN = /<!--\s*readagent:summary pages=(\d+)-(\d+)\s*-->/g;
+
+/**
+ * まとめのエントリを組み立てる。
+ *
+ * 既存のエントリを書き換えず、末尾に足すだけにしてある（ADR-0009）。
+ * 再構成は「読み直して要約を書き足す」ことであって、記録の改変ではない。
+ */
+export function renderSummary(summary: NoteSummaryDraft): string {
+  const lines = [
+    `## まとめ p.${summary.fromPage}–${summary.toPage}`,
+    '',
+    `<!-- readagent:summary pages=${summary.fromPage}-${summary.toPage} -->`,
+    '',
+    summary.body.trim(),
+    '',
+  ];
+
+  if (summary.tags?.length) {
+    lines.push(summary.tags.map((tag) => `#${tag}`).join(' '), '');
+  }
+
+  lines.push(`<sub>${summary.createdAt}</sub>`, '');
+  return lines.join('\n');
+}
+
+export function appendSummary(existing: string, summary: NoteSummaryDraft): string {
+  const base = existing.trim() ? `${existing.replace(/\s+$/, '')}\n\n` : '';
+  return `${base}${renderSummary(summary)}`;
+}
+
+/** まとめだけを取り出す。読書エントリ（parseEntries）とは別に扱う */
+export function parseSummaries(markdown: string): ParsedNoteSummary[] {
+  const summaries: ParsedNoteSummary[] = [];
+
+  for (const section of markdown.split(/^## /m).slice(1)) {
+    SUMMARY_PATTERN.lastIndex = 0;
+    const match = SUMMARY_PATTERN.exec(section);
+    const from = match?.[1];
+    const to = match?.[2];
+    if (!from || !to) continue;
+
+    const withoutHeading = section.split('\n').slice(1).join('\n');
+    const createdAt = /<sub>([^<]+)<\/sub>/.exec(withoutHeading)?.[1]?.trim();
+
+    summaries.push({
+      fromPage: Number(from),
+      toPage: Number(to),
+      body: withoutHeading
+        .replace(/<sub>[\s\S]*?<\/sub>/g, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .trim(),
+      ...(createdAt ? { createdAt } : {}),
+    });
+  }
+
+  return summaries;
+}

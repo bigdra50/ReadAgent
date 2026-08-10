@@ -6,7 +6,8 @@
  * どちらも差し替えられる。ローカル完結と将来のサーバー化を両立するための境界（ADR-0003）。
  */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
-import { type AgentEvent, askAboutSelection } from '@readagent/agent';
+import { type AgentEvent, askAboutSelection, summarizeNotes } from '@readagent/agent';
+import { parseEntries } from '@readagent/notes';
 import { buildContext, parseChatRequest, streamEvents } from './chat.js';
 import type { BookHandle, Library } from './library.js';
 import { searchNotes } from './search.js';
@@ -24,9 +25,20 @@ export type AskFn = (input: AskInput) => AsyncIterable<AgentEvent>;
 
 const defaultAsk: AskFn = (input) => askAboutSelection(input);
 
+type SummarizeInput = Pick<
+  Parameters<typeof summarizeNotes>[0],
+  'entries' | 'bookTitle' | 'recorder' | 'maxContextChars'
+> & { readonly signal: AbortSignal };
+
+/** ノートの再構成。テストでは差し替える */
+export type SummarizeFn = (input: SummarizeInput) => AsyncIterable<AgentEvent>;
+
+const defaultSummarize: SummarizeFn = (input) => summarizeNotes(input);
+
 export interface ServerDeps {
   readonly library: Library;
   readonly ask?: AskFn;
+  readonly summarize?: SummarizeFn;
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -51,7 +63,7 @@ function matchBookRoute(pathname: string): { id: string; rest: string } | null {
 }
 
 export function createReadAgentServer(deps: ServerDeps): Server {
-  const { library, ask = defaultAsk } = deps;
+  const { library, ask = defaultAsk, summarize = defaultSummarize } = deps;
 
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${HOST}`);
@@ -80,7 +92,7 @@ export function createReadAgentServer(deps: ServerDeps): Server {
       const book = await library.get(route.id);
       if (!book) return json(404, { error: 'book not found' });
 
-      return await handleBookRoute({ req, res, json, book, rest: route.rest, ask });
+      return await handleBookRoute({ req, res, json, book, rest: route.rest, ask, summarize });
     } catch (error) {
       // 1冊の読み込み失敗でプロセスを落とさない。読書側でリトライできるようにする（要件 5）
       const message = error instanceof Error ? error.message : String(error);
@@ -96,12 +108,19 @@ interface BookRouteInput {
   readonly book: BookHandle;
   readonly rest: string;
   readonly ask: AskFn;
+  readonly summarize: SummarizeFn;
 }
 
-async function handleBookRoute({ req, res, json, book, rest, ask }: BookRouteInput) {
+async function handleBookRoute({ req, res, json, book, rest, ask, summarize }: BookRouteInput) {
   if (rest === '/document' || rest === '') {
     const { document } = await book.load();
-    return json(200, { ...book.ref, pageCount: document.pageCount, toc: document.toc });
+    // 解決済みの設定も返す。UI から一時上書きするとき、いまの値を出発点にできる
+    return json(200, {
+      ...book.ref,
+      pageCount: document.pageCount,
+      toc: document.toc,
+      config: book.config,
+    });
   }
 
   const pageMatch = /^\/pages\/(\d+)$/.exec(rest);
@@ -120,6 +139,23 @@ async function handleBookRoute({ req, res, json, book, rest, ask }: BookRouteInp
   if (rest === '/notes') {
     // ノートペインは読書中いつでも開ける（要件 4）
     return json(200, { markdown: await book.notes.read() });
+  }
+
+  if (rest === '/summarize' && req.method === 'POST') {
+    const entries = parseEntries(await book.notes.read());
+    const controller = new AbortController();
+    res.on('close', () => controller.abort());
+
+    return streamEvents(
+      res,
+      summarize({
+        entries,
+        bookTitle: book.ref.title,
+        recorder: book.notes,
+        maxContextChars: book.config.maxContextChars,
+        signal: controller.signal,
+      }),
+    );
   }
 
   if (rest === '/chat' && req.method === 'POST') {

@@ -135,3 +135,37 @@ describe('横断検索', () => {
     await expect(response.json()).resolves.toEqual({ hits: [] });
   });
 });
+
+describe('ノートの再構成', () => {
+  it('既存のノートを渡して、まとめのイベントを流す', async () => {
+    const note =
+      '# A\n\n## p.3 ガードとは？\n\n<!-- readagent:anchor page=3 start=0 end=5 -->\n\n> 引用\n\n前提の確認\n';
+    const summarizable = memoryLibrary([{ id: 'a', title: 'A', notes: note }]);
+    let received: { count: number; title: string } | undefined;
+
+    const summaryServer = createReadAgentServer({
+      library: summarizable,
+      summarize: (input) => {
+        received = { count: input.entries.length, title: input.bookTitle };
+        return (async function* () {
+          yield { type: 'text', text: 'まとめ本文' } as const;
+          yield { type: 'note-updated', path: 'notes.md' } as const;
+        })();
+      },
+    });
+    await new Promise<void>((resolve) => summaryServer.listen(0, '127.0.0.1', resolve));
+    const port = (summaryServer.address() as AddressInfo).port;
+
+    const body = await fetch(`http://127.0.0.1:${port}/api/books/a/summarize`, {
+      method: 'POST',
+    }).then((r) => r.text());
+
+    expect(received).toEqual({ count: 1, title: 'A' });
+    expect(body).toContain('まとめ本文');
+    expect(body).toContain('note-updated');
+
+    await new Promise<void>((resolve, reject) =>
+      summaryServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+});

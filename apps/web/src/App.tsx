@@ -23,7 +23,7 @@ import {
   type SearchHit,
 } from './lib/api';
 import { NARROW_QUERY, useMediaQuery } from './lib/media';
-import { fetchNoteEntries, type ParsedNoteEntry } from './lib/notes';
+import { fetchNoteEntries, type ParsedNoteEntry, type ParsedNoteSummary } from './lib/notes';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -44,6 +44,7 @@ export function App() {
   const [pendingJump, setPendingJump] = useState<SelectionRange | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noteEntries, setNoteEntries] = useState<readonly ParsedNoteEntry[]>([]);
+  const [noteSummaries, setNoteSummaries] = useState<readonly ParsedNoteSummary[]>([]);
   const [noteLoading, setNoteLoading] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteStatus, setNoteStatus] = useState<'idle' | 'updating' | 'failed'>('idle');
@@ -151,8 +152,9 @@ export function App() {
     if (!bookId) return;
     setNoteLoading(true);
     fetchNoteEntries(bookId)
-      .then(({ entries }) => {
+      .then(({ entries, summaries }) => {
         setNoteEntries(entries);
+        setNoteSummaries(summaries);
         setNoteError(null);
       })
       .catch((cause: unknown) =>
@@ -316,10 +318,13 @@ export function App() {
         side={
           sidePane === 'notes' ? (
             <NotePane
+              bookId={bookId ?? ''}
               entries={noteEntries}
+              summaries={noteSummaries}
               loading={noteLoading}
               error={noteError}
               onJump={jumpTo}
+              onSummarized={reloadNotes}
             />
           ) : sidePane === 'search' ? (
             <SearchPane onOpen={openHit} />
@@ -330,6 +335,7 @@ export function App() {
               quote={quote}
               onNoteStatus={setNoteStatus}
               onNoteUpdated={reloadNotes}
+              noteConfig={summary?.config ?? null}
             />
           )
         }
