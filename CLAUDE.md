@@ -29,7 +29,7 @@ packages/core   ドメインモデル・設定解決。UI / Claude Agent SDK / f
 packages/pdf    PDFのテキスト抽出と引用の組み立て（pdf.js に依存するアダプタ）
 packages/notes  読書ノート（Markdown）の組み立てと永続化
 packages/agent  Claude Agent SDK 連携。プロンプト組み立てとイベント変換
-apps/server     ローカルHTTPサーバー。本文の提供と、今後の Agent SDK 中継
+apps/server     ローカルHTTPサーバー。書籍の提供・ノート・エージェント中継
 apps/web        読書UI（React + Vite）
 docs/           要件・アーキテクチャ・ADR
 .claude/        エージェント用ハーネス（hooks / commands / agents）

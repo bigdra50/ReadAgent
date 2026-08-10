@@ -6,16 +6,21 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BookPicker } from './components/BookPicker';
 import { ChatPane } from './components/ChatPane';
 import { NotePane } from './components/NotePane';
+import { SearchPane } from './components/SearchPane';
 import { SplitView } from './components/SplitView';
 import { type SelectionRange, TextLayer } from './components/TextLayer';
 import {
+  type BookRef,
   type DocumentSummary,
+  fetchBooks,
   fetchDocument,
   fetchPage,
   type PageResponse,
   pdfFileUrl,
+  type SearchHit,
 } from './lib/api';
 import { NARROW_QUERY, useMediaQuery } from './lib/media';
 import { fetchNoteEntries, type ParsedNoteEntry } from './lib/notes';
@@ -23,9 +28,11 @@ import { fetchNoteEntries, type ParsedNoteEntry } from './lib/notes';
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 const SCALE = 1.4;
-type SidePane = 'chat' | 'notes' | null;
+type SidePane = 'chat' | 'notes' | 'search' | null;
 
 export function App() {
+  const [books, setBooks] = useState<readonly BookRef[]>([]);
+  const [bookId, setBookId] = useState<string | null>(null);
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -33,20 +40,21 @@ export function App() {
   const [pageText, setPageText] = useState<PageResponse | null>(null);
   const [selection, setSelection] = useState<SelectionRange | null>(null);
   const [highlight, setHighlight] = useState<SelectionRange | null>(null);
+  /** 別の書籍へ飛ぶとき、その書籍が読み込まれてから当てる移動先 */
+  const [pendingJump, setPendingJump] = useState<SelectionRange | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // 狭い画面では本文だけを出して始める。ペインはオーバーレイなので、
-  // 開いたまま始めると本文が最初から隠れてしまう（要件 4）。
-  const [showToc, setShowToc] = useState(() => !window.matchMedia(NARROW_QUERY).matches);
-  const [sidePane, setSidePane] = useState<SidePane>(() =>
-    window.matchMedia(NARROW_QUERY).matches ? null : 'chat',
-  );
   const [noteEntries, setNoteEntries] = useState<readonly ParsedNoteEntry[]>([]);
   const [noteLoading, setNoteLoading] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteStatus, setNoteStatus] = useState<'idle' | 'updating' | 'failed'>('idle');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // 狭い画面ではペインがオーバーレイになる。両方開くと本文が隠れるので排他にする（要件 4）
+
+  // 狭い画面ではペインがオーバーレイになる。開いたまま始めると本文が隠れる（要件 4）
   const narrow = useMediaQuery(NARROW_QUERY);
+  const [showToc, setShowToc] = useState(() => !window.matchMedia(NARROW_QUERY).matches);
+  const [sidePane, setSidePane] = useState<SidePane>(() =>
+    window.matchMedia(NARROW_QUERY).matches ? null : 'chat',
+  );
 
   const openToc = useCallback(
     (next: boolean) => {
@@ -64,7 +72,6 @@ export function App() {
     [narrow],
   );
 
-  // 画面が狭くなった瞬間に、開きっぱなしのペインで本文が隠れないようにする
   const wasNarrow = useRef(narrow);
   useEffect(() => {
     if (narrow && !wasNarrow.current) {
@@ -75,21 +82,47 @@ export function App() {
   }, [narrow]);
 
   useEffect(() => {
-    fetchDocument()
-      .then(setSummary)
-      .catch((e: unknown) => setError(String(e)));
-    getDocument({ url: pdfFileUrl })
-      .promise.then(setPdf)
+    fetchBooks()
+      .then((found) => {
+        setBooks(found);
+        setBookId((current) => current ?? found[0]?.id ?? null);
+      })
       .catch((e: unknown) => setError(String(e)));
   }, []);
 
+  // 書籍が変わったら、本文もノートも取り直す
   useEffect(() => {
-    if (!pdf) return;
+    if (!bookId) return;
+    let cancelled = false;
+    setPdf(null);
+    setPage(null);
+    setPageNumber(1);
+    setSelection(null);
+    setHighlight(null);
+
+    fetchDocument(bookId)
+      .then((loaded) => {
+        if (!cancelled) setSummary(loaded);
+      })
+      .catch((e: unknown) => setError(String(e)));
+    getDocument({ url: pdfFileUrl(bookId) })
+      .promise.then((loaded) => {
+        if (!cancelled) setPdf(loaded);
+      })
+      .catch((e: unknown) => setError(String(e)));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId]);
+
+  useEffect(() => {
+    if (!pdf || !bookId) return;
     let cancelled = false;
     pdf.getPage(pageNumber).then((loaded) => {
       if (!cancelled) setPage(loaded);
     });
-    fetchPage(pageNumber)
+    fetchPage(bookId, pageNumber)
       .then((text) => {
         if (!cancelled) setPageText(text);
       })
@@ -97,7 +130,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [pdf, pageNumber]);
+  }, [pdf, bookId, pageNumber]);
 
   // 本文の描画。テキストレイヤと同じ viewport を使わないと選択位置がずれる。
   useEffect(() => {
@@ -114,7 +147,24 @@ export function App() {
     };
   }, [page]);
 
-  // ノートは読書中いつでも開ける（要件 4）
+  const reloadNotes = useCallback(() => {
+    if (!bookId) return;
+    setNoteLoading(true);
+    fetchNoteEntries(bookId)
+      .then(({ entries }) => {
+        setNoteEntries(entries);
+        setNoteError(null);
+      })
+      .catch((cause: unknown) =>
+        setNoteError(cause instanceof Error ? cause.message : String(cause)),
+      )
+      .finally(() => setNoteLoading(false));
+  }, [bookId]);
+
+  useEffect(() => {
+    if (sidePane === 'notes') reloadNotes();
+  }, [sidePane, reloadNotes]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
@@ -126,28 +176,14 @@ export function App() {
         event.preventDefault();
         openToc(!showToc);
       }
+      if (event.key === 'k') {
+        event.preventDefault();
+        openSide(sidePane === 'search' ? 'chat' : 'search');
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [openSide, openToc, showToc, sidePane]);
-
-  const reloadNotes = useCallback(() => {
-    setNoteLoading(true);
-    fetchNoteEntries()
-      .then(({ entries }) => {
-        setNoteEntries(entries);
-        setNoteError(null);
-      })
-      .catch((cause: unknown) =>
-        setNoteError(cause instanceof Error ? cause.message : String(cause)),
-      )
-      .finally(() => setNoteLoading(false));
-  }, []);
-
-  // ノートペインを開いたときに最新を読む
-  useEffect(() => {
-    if (sidePane === 'notes') reloadNotes();
-  }, [sidePane, reloadNotes]);
 
   /** ノートから本文へ戻る（要件 3.3 の双方向リンク） */
   const jumpTo = useCallback((target: SelectionRange) => {
@@ -155,6 +191,29 @@ export function App() {
     setHighlight(target);
     setSelection(target);
   }, []);
+
+  /** 検索結果から、別の書籍の該当箇所へ移動する */
+  const openHit = useCallback(
+    (hit: SearchHit) => {
+      const target = { page: hit.anchor.page, start: hit.anchor.start, end: hit.anchor.end };
+      if (hit.bookId === bookId) {
+        jumpTo(target);
+        return;
+      }
+      // 書籍の切り替えは非同期に進み、その途中で選択は捨てられる。
+      // 「読み込めたら当てる」を状態として持たせ、待ち時間に頼らない。
+      setBookId(hit.bookId);
+      setPendingJump(target);
+    },
+    [bookId, jumpTo],
+  );
+
+  // 切り替え先の書籍が読み込めた時点で、保留していた移動を当てる
+  useEffect(() => {
+    if (!pdf || !pendingJump) return;
+    jumpTo(pendingJump);
+    setPendingJump(null);
+  }, [pdf, pendingJump, jumpTo]);
 
   const goToPage = useCallback((next: number) => {
     setPageNumber(next);
@@ -169,6 +228,7 @@ export function App() {
     <div className="app">
       <header className="app-header">
         <strong className="app-title">ReadAgent</strong>
+        <BookPicker books={books} current={bookId} onSelect={setBookId} />
         <button type="button" aria-pressed={showToc} onClick={() => openToc(!showToc)}>
           目次
         </button>
@@ -192,7 +252,14 @@ export function App() {
             <span className="badge badge-failed" role="status" aria-label="ノートの更新に失敗" />
           )}
         </button>
-        <span className="muted app-hint">⌘I ノート / ⌘B 目次</span>
+        <button
+          type="button"
+          aria-pressed={sidePane === 'search'}
+          onClick={() => openSide(sidePane === 'search' ? null : 'search')}
+        >
+          検索
+        </button>
+        <span className="muted app-hint">⌘I ノート / ⌘K 検索 / ⌘B 目次</span>
       </header>
 
       <SplitView
@@ -254,8 +321,11 @@ export function App() {
               error={noteError}
               onJump={jumpTo}
             />
+          ) : sidePane === 'search' ? (
+            <SearchPane onOpen={openHit} />
           ) : (
             <ChatPane
+              bookId={bookId ?? ''}
               selection={selection}
               quote={quote}
               onNoteStatus={setNoteStatus}

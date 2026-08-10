@@ -54,10 +54,11 @@ export interface ChatRequest {
 
 /** チャットを開始し、届いたイベントを順に流す。signal で中断できる */
 export async function* streamChat(
+  bookId: string,
   request: ChatRequest,
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
-  const response = await fetch('/api/chat', {
+  const response = await fetch(`/api/books/${bookId}/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),

@@ -4,6 +4,7 @@ import { streamChat } from '../lib/chat';
 import type { SelectionRange } from './TextLayer';
 
 interface Props {
+  readonly bookId: string;
   readonly selection: SelectionRange | null;
   readonly quote: string | null;
   /** ノート更新の状態。ヘッダーに控えめに出す（要件 4） */
@@ -21,7 +22,7 @@ interface ToolRun {
  * 選択箇所を起点にした深掘りチャット（要件 3.2）。
  * 走っている問い合わせは常に中断できる。読書を止めないことが前提のため（要件 5）。
  */
-export function ChatPane({ selection, quote, onNoteStatus, onNoteUpdated }: Props) {
+export function ChatPane({ bookId, selection, quote, onNoteStatus, onNoteUpdated }: Props) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [tools, setTools] = useState<ToolRun[]>([]);
@@ -87,7 +88,7 @@ export function ChatPane({ selection, quote, onNoteStatus, onNoteUpdated }: Prop
         end: selection.end,
         ...(question.trim() ? { question: question.trim() } : {}),
       };
-      for await (const event of streamChat(request, controller.signal)) {
+      for await (const event of streamChat(bookId, request, controller.signal)) {
         applyEvent(event);
       }
       setStatus((current) => (current === 'streaming' ? 'idle' : current));
@@ -96,7 +97,7 @@ export function ChatPane({ selection, quote, onNoteStatus, onNoteUpdated }: Prop
       setStatus('error');
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [applyEvent, onNoteStatus, question, selection]);
+  }, [applyEvent, bookId, onNoteStatus, question, selection]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();

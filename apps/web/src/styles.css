@@ -340,3 +340,43 @@ blockquote {
     cursor: default;
   }
 }
+
+/* 書籍の切り替えと検索 */
+.book-picker select {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  max-width: 220px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.book-name {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.search input[type="search"] {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
