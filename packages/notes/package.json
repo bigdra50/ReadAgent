@@ -1,0 +1,27 @@
+{
+  "name": "@readagent/notes",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "読書ノート（Markdown）の組み立てと永続化",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@readagent/core": "workspace:*"
+  }
+}
