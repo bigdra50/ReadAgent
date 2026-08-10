@@ -2,6 +2,7 @@ import { createMemoryNoteStore } from '@readagent/notes';
 import { describe, expect, it } from 'vitest';
 import { askAboutSelection, type QueryFn } from '../src/ask.js';
 import { createNoteToolServer, NOTE_TOOL_ID } from '../src/notes.js';
+import { GRANULARITY_GUIDANCE } from '../src/prompt.js';
 
 const anchor = { page: 5, start: 10, end: 30 };
 const noteContext = {
@@ -94,7 +95,12 @@ describe('updateMode', () => {
       askAboutSelection({
         context: selection,
         budget,
-        notes: { updateMode: 'manual', recorder: store, context: noteContext },
+        notes: {
+          updateMode: 'manual',
+          granularity: 'per-question',
+          recorder: store,
+          context: noteContext,
+        },
         queryFn: fakeQuery([textDelta('答え'), success()], (params) => {
           allowed = (params as { options?: { allowedTools?: string[] } }).options?.allowedTools;
         }),
@@ -113,7 +119,12 @@ describe('updateMode', () => {
       askAboutSelection({
         context: selection,
         budget,
-        notes: { updateMode: 'agent', recorder: store, context: noteContext },
+        notes: {
+          updateMode: 'agent',
+          granularity: 'per-question',
+          recorder: store,
+          context: noteContext,
+        },
         queryFn: fakeQuery([textDelta('答え'), success()], (params) => {
           allowed = (params as { options?: { allowedTools?: string[] } }).options?.allowedTools;
         }),
@@ -132,7 +143,12 @@ describe('updateMode', () => {
       askAboutSelection({
         context: selection,
         budget,
-        notes: { updateMode: 'always', recorder: store, context: noteContext },
+        notes: {
+          updateMode: 'always',
+          granularity: 'per-question',
+          recorder: store,
+          context: noteContext,
+        },
         queryFn: fakeQuery([textDelta('前半'), textDelta('後半'), success()]),
       }),
     );
@@ -150,7 +166,12 @@ describe('updateMode', () => {
       askAboutSelection({
         context: selection,
         budget,
-        notes: { updateMode: 'always', recorder: store, context: noteContext },
+        notes: {
+          updateMode: 'always',
+          granularity: 'per-question',
+          recorder: store,
+          context: noteContext,
+        },
         queryFn: fakeQuery([success()]),
       }),
     );
@@ -165,7 +186,12 @@ describe('updateMode', () => {
       askAboutSelection({
         context: selection,
         budget,
-        notes: { updateMode: 'always', recorder: store, context: noteContext },
+        notes: {
+          updateMode: 'always',
+          granularity: 'per-question',
+          recorder: store,
+          context: noteContext,
+        },
         queryFn: fakeQuery([textDelta('答え'), success()]),
       }),
     );
@@ -183,7 +209,12 @@ describe('updateMode', () => {
       askAboutSelection({
         context: selection,
         budget,
-        notes: { updateMode: 'always', recorder: failing, context: noteContext },
+        notes: {
+          updateMode: 'always',
+          granularity: 'per-question',
+          recorder: failing,
+          context: noteContext,
+        },
         queryFn: fakeQuery([textDelta('答え'), success()]),
       }),
     );
@@ -200,7 +231,12 @@ describe('updateMode', () => {
       context: selection,
       budget,
       signal: controller.signal,
-      notes: { updateMode: 'always', recorder: store, context: noteContext },
+      notes: {
+        updateMode: 'always',
+        granularity: 'per-question',
+        recorder: store,
+        context: noteContext,
+      },
       queryFn: fakeQuery([textDelta('途中'), textDelta('まで'), success()]),
     });
 
@@ -211,5 +247,49 @@ describe('updateMode', () => {
     }
 
     expect(store.content()).toBe('');
+  });
+});
+
+describe('granularity', () => {
+  it('ノートを書けるときだけ、粒度の指示をシステムプロンプトに足す', async () => {
+    let prompt: string | undefined;
+    await collect(
+      askAboutSelection({
+        context: selection,
+        budget,
+        notes: {
+          updateMode: 'agent',
+          granularity: 'summary',
+          recorder: createMemoryNoteStore(),
+          context: noteContext,
+        },
+        queryFn: fakeQuery([success()], (params) => {
+          prompt = (params as { options?: { systemPrompt?: string } }).options?.systemPrompt;
+        }),
+      }),
+    );
+
+    expect(prompt).toContain('要約だけを残す');
+  });
+
+  it('ノートを書けないときは粒度を語らない', async () => {
+    let prompt: string | undefined;
+    await collect(
+      askAboutSelection({
+        context: selection,
+        budget,
+        queryFn: fakeQuery([success()], (params) => {
+          prompt = (params as { options?: { systemPrompt?: string } }).options?.systemPrompt;
+        }),
+      }),
+    );
+
+    expect(prompt).not.toContain('粒度');
+  });
+
+  it('粒度ごとに違う指示になる', () => {
+    const values = Object.values(GRANULARITY_GUIDANCE);
+
+    expect(new Set(values).size).toBe(values.length);
   });
 });
