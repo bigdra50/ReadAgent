@@ -71,6 +71,7 @@
 | --- | --- | --- |
 | パッケージ境界 | `packages/core` を副作用から隔離する | [ADR-0003](adr/0003-keep-core-pure.md) |
 | ノートの保存単位 | 書籍ごとに1つの Markdown へ追記 | [ADR-0006](adr/0006-note-storage.md) |
+| 設定の層 | グローバル JSON → 書籍の `.readagent.json` → 環境変数 | 要件 3.4 / `apps/server/src/config.ts` |
 | エージェントの権限 | 読み取り専用の Web ツールとノート更新のみ | [ADR-0007](adr/0007-agent-permissions.md) |
 | 実行形態 | Phase 1 はローカル Node サーバー + ブラウザ。シェルは Phase 3 以降に再評価 | [ADR-0004](adr/0004-runtime-shell.md) |
 | PDF | `pdfjs-dist` でテキスト抽出とテキストレイヤ描画 | [ADR-0004](adr/0004-runtime-shell.md) |

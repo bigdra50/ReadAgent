@@ -6,9 +6,10 @@
 全文をAIに渡すのではなく、**選択範囲を起点にエージェントがツールを使って調査・整理する**
 「エージェント寄り」の読書体験を目指しています。
 
-> **状態: Phase 2 まで。** PDFを開いて一節を選択し、質問すると回答がストリーミングで返り、
-> ツールの実行状況が見え、途中で中断できます。対話の内容は Markdown の読書ノートへ
-> 自動で追記されます。ノートのUI（Phase 3）はこれからです（[docs/roadmap.md](docs/roadmap.md)）。
+> **状態: Phase 3 まで。** PDFを開いて一節を選択し、質問すると回答がストリーミングで返り、
+> 対話の内容が Markdown の読書ノートへ追記されます。ノートペインからは
+> 記録した箇所の本文へ戻れます。残りは Mermaid の描画と複数書籍対応です
+> （[docs/roadmap.md](docs/roadmap.md)）。
 >
 > エージェントは Claude サブスクリプションの認証を使います。手元で `claude` に
 > ログイン済みであれば、そのまま動くはずです（作者の環境では未確認）。
@@ -40,15 +41,44 @@ pnpm --filter @readagent/web dev                 # 読書UI (127.0.0.1:5173)
 
 サーバーは `127.0.0.1` にのみバインドします。認証が入るまで外に出さないでください（[ADR-0004](docs/adr/0004-runtime-shell.md)）。
 
+### 画面
+
+| 操作 | |
+| --- | --- |
+| `⌘I` / `Ctrl+I` | 読書ノートの表示切り替え |
+| `⌘B` / `Ctrl+B` | 目次の表示切り替え |
+
+ペインの境界はドラッグでも矢印キーでも動かせます。
+画面が狭いときは目次とノートがオーバーレイになり、本文が隠れないよう排他で表示されます。
+ノートのエントリをクリックすると、記録した箇所の本文へ戻ります。
+
 ### 読書ノート
 
 ノートは書籍と同じディレクトリの `notes.md` に追記されます（[ADR-0006](docs/adr/0006-note-storage.md)）。
-更新のタイミングは環境変数で変えられます（設定ファイルからの読み込みは Phase 3）。
 
-| 変数 | 既定 | 意味 |
+### 設定
+
+「グローバル → 書籍 → 環境変数」の順に後勝ちで解決します（要件 3.4）。
+
+| 層 | 位置 |
+| --- | --- |
+| グローバル | `$XDG_CONFIG_HOME/readagent/config.json`（既定は `~/.config/...`） |
+| 書籍 | 書籍と同じディレクトリの `.readagent.json` |
+| スコープ | 環境変数 |
+
+```json
+{ "updateMode": "always", "granularity": "per-section", "notePath": "notes.md" }
+```
+
+| 設定 | 既定 | 意味 |
 | --- | --- | --- |
-| `READAGENT_UPDATE_MODE` | `agent` | `agent`（エージェントが判断）/ `always`（毎回）/ `manual`（更新しない） |
-| `READAGENT_NOTE_PATH` | `notes.md` | ノートの位置（書籍ディレクトリからの相対パス） |
+| `updateMode` | `agent` | `agent`（エージェントが判断）/ `always`（毎回）/ `manual`（更新しない） |
+| `granularity` | `per-question` | ノートの粒度。エージェントへの指示として渡す |
+| `notePath` | `notes.md` | ノートの位置（書籍ディレクトリからの相対パス） |
+| `maxContextChars` | `8000` | エージェントに渡す文脈の上限 |
+
+環境変数は `READAGENT_UPDATE_MODE` / `READAGENT_GRANULARITY` / `READAGENT_NOTE_PATH`。
+不正な値は警告を出して既定値のまま起動します。
 
 エージェントに渡すツールは、読み取り専用の Web 検索・取得と、ノート更新だけです。
 ファイルシステムやシェルには触れません（[ADR-0007](docs/adr/0007-agent-permissions.md)）。
