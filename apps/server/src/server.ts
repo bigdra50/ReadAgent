@@ -1,16 +1,18 @@
 /**
  * ローカル完結版のサーバー（ADR-0004）。
  *
- * 現時点の責務は「PDFの本文と目次を返す」ことだけ。
- * Claude Agent SDK の中継はこのプロセスに載せる予定で、その理由も ADR-0004 にある。
+ * PDFの本文・目次の提供と、選択範囲を起点にしたエージェントへの中継を担う。
+ * Agent SDK をこのプロセスに載せる理由は ADR-0004 にある。
  *
  * 読み込みは引数で差し替えられるようにしてある。HTTP の振る舞いを、
  * 実ファイルと pdf.js を用意せずに検証できるようにするため。
  */
 
 import { readFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { type AgentEvent, askAboutSelection } from '@readagent/agent';
 import { type ExtractedDocument, extractDocument } from '@readagent/pdf';
+import { buildContext, parseChatRequest, streamEvents } from './chat.js';
 
 /** ローカル完結が前提。認証を入れるまで外に出さない（ADR-0004） */
 export const HOST = '127.0.0.1';
@@ -35,7 +37,38 @@ export function createFileDocumentLoader(pdfPath: string): DocumentLoader {
   };
 }
 
-export function createReadAgentServer(loadDocument: DocumentLoader): Server {
+/** 選択範囲を起点にエージェントへ問い合わせる関数。テストでは差し替える */
+export type AskFn = (input: {
+  context: Parameters<typeof askAboutSelection>[0]['context'];
+  budget: Parameters<typeof askAboutSelection>[0]['budget'];
+  signal: AbortSignal;
+}) => AsyncIterable<AgentEvent>;
+
+const defaultAsk: AskFn = ({ context, budget, signal }) =>
+  askAboutSelection({ context, budget, signal });
+
+export interface ServerDeps {
+  readonly loadDocument: DocumentLoader;
+  readonly ask?: AskFn;
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(chunk as Buffer);
+  }
+  if (chunks.length === 0) return null;
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server {
+  const { loadDocument, ask = defaultAsk } =
+    typeof deps === 'function' ? { loadDocument: deps, ask: defaultAsk } : deps;
+
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${HOST}`);
     const json = (status: number, body: unknown) => {
@@ -58,6 +91,24 @@ export function createReadAgentServer(loadDocument: DocumentLoader): Server {
         const { document } = await loadDocument();
         const page = document.pages[Number(pageMatch[1]) - 1];
         return page ? json(200, page) : json(404, { error: 'page not found' });
+      }
+
+      if (url.pathname === '/api/chat' && req.method === 'POST') {
+        const parsed = parseChatRequest(await readJsonBody(req));
+        if ('error' in parsed) return json(400, parsed);
+
+        const { document } = await loadDocument();
+        const pageText = document.pages[parsed.page - 1];
+        if (!pageText) return json(404, { error: 'page not found' });
+
+        // 読者が画面を閉じた・次の質問に移った時点で、走っている問い合わせを止める。
+        // 監視するのは req ではなく res。本文を読み切った時点で req の close は
+        // すでに発火しており、そこに登録しても切断を拾えない。
+        const controller = new AbortController();
+        res.on('close', () => controller.abort());
+
+        const { context, budget } = buildContext(pageText, parsed);
+        return streamEvents(res, ask({ context, budget, signal: controller.signal }));
       }
 
       if (url.pathname === '/api/document/file') {

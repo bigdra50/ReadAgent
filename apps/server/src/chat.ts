@@ -1,0 +1,88 @@
+/**
+ * 選択範囲を起点にしたチャットの中継（要件 3.2）。
+ *
+ * ブラウザから受け取るのはオフセットだけで、引用文そのものは受け取らない。
+ * DOM の選択文字列は正規テキストとずれるため（docs/spike-pdf-text-anchor.md）、
+ * 引用はサーバー側で本文から切り出す。
+ */
+import type { ServerResponse } from 'node:http';
+import type { AgentEvent } from '@readagent/agent';
+import { resolveNoteConfig } from '@readagent/core';
+import { type PageText, renderQuote, sliceRange } from '@readagent/pdf';
+
+/** 選択の前後から拾う文脈の量。予算の残りに収まる範囲で使う */
+const CONTEXT_CHARS = 600;
+
+export interface ChatRequest {
+  readonly page: number;
+  readonly start: number;
+  readonly end: number;
+  readonly question?: string;
+}
+
+export function parseChatRequest(body: unknown): ChatRequest | { error: string } {
+  if (typeof body !== 'object' || body === null) return { error: 'リクエストが不正です' };
+  const raw = body as Record<string, unknown>;
+  const { page, start, end, question } = raw;
+
+  if (!Number.isInteger(page) || (page as number) < 1) return { error: 'page が不正です' };
+  if (!Number.isInteger(start) || (start as number) < 0) return { error: 'start が不正です' };
+  if (!Number.isInteger(end) || (end as number) <= (start as number)) {
+    return { error: 'end が不正です' };
+  }
+  if (question !== undefined && typeof question !== 'string') {
+    return { error: 'question が不正です' };
+  }
+
+  return {
+    page: page as number,
+    start: start as number,
+    end: end as number,
+    ...(typeof question === 'string' ? { question } : {}),
+  };
+}
+
+/** 選択範囲から、エージェントへ渡す文脈を組み立てる */
+export function buildContext(pageText: PageText, request: ChatRequest) {
+  const config = resolveNoteConfig();
+  return {
+    context: {
+      page: request.page,
+      quote: renderQuote(pageText, request.start, request.end),
+      before: sliceRange(pageText, request.start - CONTEXT_CHARS, request.start),
+      after: sliceRange(pageText, request.end, request.end + CONTEXT_CHARS),
+      ...(request.question ? { question: request.question } : {}),
+    },
+    budget: { maxContextChars: config.maxContextChars },
+  };
+}
+
+/**
+ * イベント列を SSE として書き出す。
+ * 読書とチャットを止めないため、接続が切れた時点で速やかに中断する（要件 5）。
+ */
+export async function streamEvents(
+  res: ServerResponse,
+  events: AsyncIterable<AgentEvent>,
+): Promise<void> {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+
+  try {
+    for await (const event of events) {
+      if (res.writableEnded) break;
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!res.writableEnded) {
+      const failed: AgentEvent = { type: 'done', ok: false, error: message };
+      res.write(`data: ${JSON.stringify(failed)}\n\n`);
+    }
+  } finally {
+    if (!res.writableEnded) res.end();
+  }
+}
