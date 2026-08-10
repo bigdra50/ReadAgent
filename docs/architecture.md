@@ -48,7 +48,7 @@
 | `apps/server` | ローカルHTTPサーバー。本文の提供と、今後のエージェント中継 | 実装済み（最小） |
 | `apps/web` | 読書UI（分割ビュー・テキストレイヤ・選択） | 実装済み（骨格） |
 | `packages/agent` | Claude Agent SDK 連携、プロンプト組み立て、イベント変換 | 実装済み（最小） |
-| `packages/notes` | Markdown ノートの読み書きと双方向リンク | 未着手（Phase 2） |
+| `packages/notes` | Markdown ノートの組み立てと永続化 | 実装済み（最小） |
 
 パッケージは**必要になった時点で**作ります。空のパッケージを先に並べません。
 
@@ -57,7 +57,6 @@
 | 論点 | 選択肢 | 決める時期 |
 | --- | --- | --- |
 | UI フレームワーク | React / Svelte / その他 | Phase 1 着手時 |
-| ノートの保存単位 | 書籍1ファイル / エントリ1ファイル + インデックス | Phase 2 着手時 |
 | 選択箇所の永続的な位置指定 | ページ+文字オフセット（実測で推奨）/ テキストアンカー | Phase 2 着手時 |
 
 最後の論点は特に重要です。PDFの再抽出やビューアの実装差でオフセットがずれると、
@@ -71,6 +70,8 @@
 | 論点 | 決定 | 記録 |
 | --- | --- | --- |
 | パッケージ境界 | `packages/core` を副作用から隔離する | [ADR-0003](adr/0003-keep-core-pure.md) |
+| ノートの保存単位 | 書籍ごとに1つの Markdown へ追記 | [ADR-0006](adr/0006-note-storage.md) |
+| エージェントの権限 | 読み取り専用の Web ツールとノート更新のみ | [ADR-0007](adr/0007-agent-permissions.md) |
 | 実行形態 | Phase 1 はローカル Node サーバー + ブラウザ。シェルは Phase 3 以降に再評価 | [ADR-0004](adr/0004-runtime-shell.md) |
 | PDF | `pdfjs-dist` でテキスト抽出とテキストレイヤ描画 | [ADR-0004](adr/0004-runtime-shell.md) |
 | Agent SDK の実行位置 | ローカルサーバーの Node プロセス内 | [ADR-0004](adr/0004-runtime-shell.md) |

@@ -27,6 +27,7 @@ ReadAgent — 技術書PDFを読みながら、気になった箇所を選択し
 ```
 packages/core   ドメインモデル・設定解決。UI / Claude Agent SDK / fs / ネットワークに依存しない
 packages/pdf    PDFのテキスト抽出と引用の組み立て（pdf.js に依存するアダプタ）
+packages/notes  読書ノート（Markdown）の組み立てと永続化
 packages/agent  Claude Agent SDK 連携。プロンプト組み立てとイベント変換
 apps/server     ローカルHTTPサーバー。本文の提供と、今後の Agent SDK 中継
 apps/web        読書UI（React + Vite）
@@ -83,6 +84,15 @@ docs/           要件・アーキテクチャ・ADR
   そして**キャンセルできる**ことが、この機能の前提条件。
 - 迷う設計上の分岐（保存形式、プロセス構成、依存の選定など）は勝手に決めず、
   選択肢と推奨案を出して確認する。決めたら `docs/adr/` に残す。
+
+## エージェントに渡してよいもの
+
+ADR-0007 で決めた方針。**ツールを足すときは ADR を更新する。**
+
+- 許可: `WebSearch` / `WebFetch`（読み取り専用）と、ノート更新の `update_note`
+- 渡さない: `Read` / `Glob` / `Grep` / `Write` / `Edit` / `Bash`
+- `update_note` の書き込み先はサーバー側で固定する。**パスを引数で受け取らない。**
+  技術書のPDFは信頼できない入力として扱う（本文に指示が仕込まれうる）
 
 ## やらないこと
 
