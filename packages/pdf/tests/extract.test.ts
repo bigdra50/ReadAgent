@@ -49,3 +49,41 @@ describe('extractDocument', () => {
     expect(pdf.byteLength).toBeGreaterThan(0);
   });
 });
+
+describe('目次のページ解決', () => {
+  it('目次項目を 1 始まりのページ番号つきで返す', async () => {
+    const pdf = buildMinimalPdf(
+      [['page one'], ['page two'], ['page three']],
+      [
+        { title: 'Chapter 1', page: 1 },
+        { title: 'Chapter 2', page: 3 },
+      ],
+    );
+
+    const doc = await extractDocument(pdf);
+
+    expect(doc.toc).toHaveLength(2);
+    expect(doc.toc[0]).toMatchObject({ title: 'Chapter 1', page: 1, depth: 0 });
+    expect(doc.toc[1]).toMatchObject({ title: 'Chapter 2', page: 3, depth: 0 });
+  });
+
+  it('目次項目に安定した ID を振る', async () => {
+    const pdf = buildMinimalPdf(
+      [['a'], ['b']],
+      [
+        { title: 'First', page: 1 },
+        { title: 'Second', page: 2 },
+      ],
+    );
+
+    const doc = await extractDocument(pdf);
+
+    expect(doc.toc.map((entry) => entry.id)).toEqual(['0', '1']);
+  });
+
+  it('目次が無ければ空を返す', async () => {
+    const doc = await extractDocument(buildMinimalPdf([['only page']]));
+
+    expect(doc.toc).toEqual([]);
+  });
+});
