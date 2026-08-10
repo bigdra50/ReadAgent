@@ -10,6 +10,8 @@ export type {
 export {
   appendEntry,
   appendSummary,
+  collectTags,
+  extractTags,
   parseAnchors,
   parseEntries,
   parseSummaries,

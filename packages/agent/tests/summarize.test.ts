@@ -9,12 +9,14 @@ const entries = [
     heading: 'ガードとは？',
     quote: 'ガードは前提を確認する',
     body: '崩れたらサイドイグジット。',
+    tags: ['jit'],
   },
   {
     anchor: { page: 12, start: 0, end: 5 },
     heading: 'トレースとは？',
     quote: '実行経路を記録する',
     body: '線形なので最適化しやすい。',
+    tags: ['jit', 'trace'],
   },
 ];
 
@@ -48,12 +50,17 @@ describe('buildSummaryPrompt', () => {
     expect(prompt).toContain('崩れたらサイドイグジット。');
   });
 
+  it('タグも渡す（整理の手がかりになる）', () => {
+    expect(buildSummaryPrompt(entries, 'JIT入門', 8000)).toContain('#jit');
+  });
+
   it('予算を超えたら途中で打ち切る（全文を投げない）', () => {
     const many = Array.from({ length: 200 }, (_, index) => ({
       anchor: { page: index + 1, start: 0, end: 5 },
       heading: `見出し${index}`,
       quote: 'あ'.repeat(200),
       body: 'い'.repeat(200),
+      tags: [],
     }));
 
     const prompt = buildSummaryPrompt(many, '厚い本', 1000);
