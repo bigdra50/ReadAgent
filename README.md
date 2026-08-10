@@ -16,7 +16,7 @@
 
 ## 必要環境
 
-- Node.js 22 以上（`.nvmrc` 参照）
+- Node.js 26 以上（`.nvmrc` 参照）
 - pnpm 10 以上（`corepack enable` 推奨）
 
 ## セットアップ
