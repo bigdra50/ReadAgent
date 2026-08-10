@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   appendEntry,
   appendSummary,
+  collectTags,
+  extractTags,
   parseAnchors,
   parseEntries,
   parseSummaries,
@@ -236,5 +238,57 @@ describe('まとめ（ノートの再構成）', () => {
     const withDiagram = { ...summary, body: '説明\n\n```mermaid\ngraph TD\n  A-->B\n```' };
 
     expect(parseSummaries(appendSummary('', withDiagram))[0]?.body).toContain('graph TD');
+  });
+});
+
+describe('タグ', () => {
+  it('タグ行からタグを取り出し、本文から外す', () => {
+    const { tags, rest } = extractTags('要点はこれ。\n\n#jit #trace\n');
+
+    expect(tags).toEqual(['jit', 'trace']);
+    expect(rest).toBe('要点はこれ。');
+  });
+
+  it('本文の途中に出てくる # は拾わない', () => {
+    const { tags, rest } = extractTags('C# の話と #1 の話');
+
+    expect(tags).toEqual([]);
+    expect(rest).toBe('C# の話と #1 の話');
+  });
+
+  it('重複したタグはまとめる', () => {
+    expect(extractTags('#jit\n#jit #trace').tags).toEqual(['jit', 'trace']);
+  });
+
+  it('エントリを解析するとタグが構造として取れる', () => {
+    const note = appendEntry('', { ...entry, tags: ['jit', 'trace'] });
+    const parsed = parseEntries(note)[0];
+
+    expect(parsed?.tags).toEqual(['jit', 'trace']);
+    expect(parsed?.body).not.toContain('#jit');
+    expect(parsed?.body).toContain('前提が崩れていないかを確認するため。');
+  });
+
+  it('タグの無いエントリでは空になる', () => {
+    expect(parseEntries(appendEntry('', entry))[0]?.tags).toEqual([]);
+  });
+
+  it('ノート全体のタグを多い順に集める', () => {
+    let note = appendEntry('', { ...entry, tags: ['jit'] });
+    note = appendEntry(note, {
+      ...entry,
+      anchor: { page: 2, start: 0, end: 1 },
+      tags: ['jit', 'gc'],
+    });
+    note = appendEntry(note, {
+      ...entry,
+      anchor: { page: 3, start: 0, end: 1 },
+      tags: ['gc', 'jit'],
+    });
+
+    expect(collectTags(parseEntries(note))).toEqual([
+      { tag: 'jit', count: 3 },
+      { tag: 'gc', count: 2 },
+    ]);
   });
 });

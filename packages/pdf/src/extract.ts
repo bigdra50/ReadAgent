@@ -22,25 +22,71 @@ export interface ExtractedDocument {
 
 interface RawOutlineItem {
   title: string;
+  dest?: string | unknown[] | null;
   items?: RawOutlineItem[];
 }
 
+/** 宛先の参照を解決できる最小限の窓口。テストで差し替えられるようにしてある */
+interface DestinationResolver {
+  getDestination(id: string): Promise<unknown[] | null>;
+  getPageIndex(ref: { num: number; gen: number }): Promise<number>;
+}
+
+function isPageRef(value: unknown): value is { num: number; gen: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { num?: unknown }).num === 'number' &&
+    typeof (value as { gen?: unknown }).gen === 'number'
+  );
+}
+
 /**
- * 目次を TocEntry へ変換する。
- * ページ番号の解決には宛先の解決（dest → page index）が要るが、
- * それは表示側の関心なので Phase 1 では 0 のままにしてある。
+ * 目次項目の宛先を 1 始まりのページ番号へ解決する。
+ * 解決できない項目は 0 を返す。目次の1項目が壊れていても、目次全体は出したい。
  */
-function toTocEntries(items: readonly RawOutlineItem[], depth: number, path: string): TocEntry[] {
-  return items.map((item, index) => {
+async function resolvePage(
+  dest: string | unknown[] | null | undefined,
+  doc: DestinationResolver,
+): Promise<number> {
+  if (!dest) return 0;
+
+  try {
+    const explicit = typeof dest === 'string' ? await doc.getDestination(dest) : dest;
+    const target = explicit?.[0];
+    if (target === undefined) return 0;
+
+    // 参照ではなく、ページ番号が直接入っている PDF もある
+    if (typeof target === 'number') return target + 1;
+    if (!isPageRef(target)) return 0;
+
+    return (await doc.getPageIndex(target)) + 1;
+  } catch {
+    return 0;
+  }
+}
+
+/** 目次を TocEntry へ変換する。ページ番号もここで解決する */
+async function toTocEntries(
+  items: readonly RawOutlineItem[],
+  depth: number,
+  path: string,
+  doc: DestinationResolver,
+): Promise<TocEntry[]> {
+  const entries: TocEntry[] = [];
+
+  for (const [index, item] of items.entries()) {
     const id = `${path}${index}`;
-    return {
+    entries.push({
       id,
       title: item.title,
-      page: 0,
+      page: await resolvePage(item.dest, doc),
       depth,
-      children: toTocEntries(item.items ?? [], depth + 1, `${id}.`),
-    };
-  });
+      children: await toTocEntries(item.items ?? [], depth + 1, `${id}.`, doc),
+    });
+  }
+
+  return entries;
 }
 
 export async function extractDocument(data: Uint8Array): Promise<ExtractedDocument> {
@@ -64,7 +110,7 @@ export async function extractDocument(data: Uint8Array): Promise<ExtractedDocume
     return {
       pageCount: doc.numPages,
       pages,
-      toc: toTocEntries(outline ?? [], 0, ''),
+      toc: await toTocEntries(outline ?? [], 0, '', doc),
     };
   } finally {
     await loadingTask.destroy();

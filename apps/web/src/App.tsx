@@ -1,3 +1,4 @@
+import { chapterRanges } from '@readagent/core';
 import { renderQuote } from '@readagent/pdf/text';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
 // 既定のビルドは Map.prototype.getOrInsertComputed や Math.sumPrecise といった
@@ -5,7 +6,7 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf
 // legacy ビルドはそこを吸収するので、ブラウザ側もサーバー側もこちらに揃える。
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookPicker } from './components/BookPicker';
 import { ChatPane } from './components/ChatPane';
 import { NotePane } from './components/NotePane';
@@ -226,6 +227,12 @@ export function App() {
   const quote =
     pageText && selection ? renderQuote(pageText, selection.start, selection.end) : null;
 
+  // 目次のページが解決できている書籍でだけ、章単位のまとめが選べる
+  const chapters = useMemo(
+    () => (summary ? chapterRanges(summary.toc, summary.pageCount) : []),
+    [summary],
+  );
+
   return (
     <div className="app">
       <header className="app-header">
@@ -325,6 +332,7 @@ export function App() {
               error={noteError}
               onJump={jumpTo}
               onSummarized={reloadNotes}
+              chapters={chapters}
             />
           ) : sidePane === 'search' ? (
             <SearchPane onOpen={openHit} />

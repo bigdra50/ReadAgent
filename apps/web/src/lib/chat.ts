@@ -91,10 +91,24 @@ export async function* streamChat(
   );
 }
 
-/** ノートの再構成を始め、届いたイベントを流す */
+export interface SummaryScope {
+  readonly fromPage?: number;
+  readonly toPage?: number;
+  readonly title?: string;
+}
+
+/** ノートの再構成を始め、届いたイベントを流す。範囲を渡すと章単位になる */
 export async function* streamSummary(
   bookId: string,
+  scope: SummaryScope,
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
-  yield* readEvents(await fetch(`/api/books/${bookId}/summarize`, { method: 'POST', signal }));
+  yield* readEvents(
+    await fetch(`/api/books/${bookId}/summarize`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(scope),
+      signal,
+    }),
+  );
 }

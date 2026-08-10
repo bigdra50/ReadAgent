@@ -21,3 +21,5 @@ export type {
   Selection,
   TocEntry,
 } from './domain.js';
+export type { ChapterRange } from './toc.js';
+export { chapterRanges } from './toc.js';

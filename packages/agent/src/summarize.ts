@@ -50,6 +50,8 @@ export function buildSummaryPrompt(
       `\n--- p.${entry.anchor.page} ${entry.heading}`,
       `引用: ${entry.quote}`,
       entry.body ? `記録: ${entry.body}` : '',
+      // タグは整理の手がかりになるので、まとめる側にも渡す
+      entry.tags.length > 0 ? `タグ: ${entry.tags.map((tag) => `#${tag}`).join(' ')}` : '',
     ]
       .filter(Boolean)
       .join('\n');

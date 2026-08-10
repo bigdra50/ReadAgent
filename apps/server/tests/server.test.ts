@@ -169,3 +169,78 @@ describe('ノートの再構成', () => {
     );
   });
 });
+
+describe('章単位のまとめ', () => {
+  const noteWith = (pages: number[]) =>
+    pages
+      .map(
+        (page) =>
+          `## p.${page} 見出し${page}\n\n<!-- readagent:anchor page=${page} start=0 end=5 -->\n\n> 引用${page}\n\n本文${page}\n`,
+      )
+      .join('\n');
+
+  const startWith = async (notes: string) => {
+    let received: { pages: number[]; title: string } | undefined;
+    const server = createReadAgentServer({
+      library: memoryLibrary([{ id: 'a', title: 'A', notes }]),
+      summarize: (input) => {
+        received = {
+          pages: input.entries.map((entry) => entry.anchor.page),
+          title: input.bookTitle,
+        };
+        return (async function* () {
+          yield { type: 'done', ok: true } as const;
+        })();
+      },
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    return {
+      port,
+      get received() {
+        return received;
+      },
+      close: () =>
+        new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        ),
+    };
+  };
+
+  it('範囲を指定するとその章のエントリだけを渡す', async () => {
+    const ctx = await startWith(noteWith([1, 5, 12, 20]));
+
+    await fetch(`http://127.0.0.1:${ctx.port}/api/books/a/summarize`, {
+      method: 'POST',
+      body: JSON.stringify({ fromPage: 5, toPage: 12, title: '第2章' }),
+    }).then((r) => r.text());
+
+    expect(ctx.received?.pages).toEqual([5, 12]);
+    expect(ctx.received?.title).toBe('A / 第2章');
+    await ctx.close();
+  });
+
+  it('範囲を指定しなければ全体をまとめる', async () => {
+    const ctx = await startWith(noteWith([1, 5, 12]));
+
+    await fetch(`http://127.0.0.1:${ctx.port}/api/books/a/summarize`, { method: 'POST' }).then(
+      (r) => r.text(),
+    );
+
+    expect(ctx.received?.pages).toEqual([1, 5, 12]);
+    expect(ctx.received?.title).toBe('A');
+    await ctx.close();
+  });
+
+  it('範囲が逆なら 400 を返す', async () => {
+    const ctx = await startWith(noteWith([1]));
+
+    const response = await fetch(`http://127.0.0.1:${ctx.port}/api/books/a/summarize`, {
+      method: 'POST',
+      body: JSON.stringify({ fromPage: 10, toPage: 3 }),
+    });
+
+    expect(response.status).toBe(400);
+    await ctx.close();
+  });
+});

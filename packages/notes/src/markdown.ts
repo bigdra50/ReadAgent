@@ -95,10 +95,47 @@ export interface ParsedNoteEntry {
   /** `## ` 見出しの本文（ページ表記を除いた部分） */
   readonly heading: string;
   readonly quote: string;
-  /** 引用より後の本文。時刻とアンカーは取り除いてある */
+  /** 引用と時刻とタグを取り除いた本文 */
   readonly body: string;
   /** 記録した時刻（ISO 8601）。書式が違えば undefined */
   readonly createdAt?: string;
+  /** `#タグ` の行から取り出したタグ。順序は本文の出現順 */
+  readonly tags: readonly string[];
+}
+
+/** タグだけの行（`#a #b`）からタグを取り出す。本文中の `#` は拾わない */
+const TAG_LINE = /^\s*(#[^\s#]+(?:\s+#[^\s#]+)*)\s*$/;
+
+export function extractTags(body: string): { tags: string[]; rest: string } {
+  const tags: string[] = [];
+  const rest: string[] = [];
+
+  for (const line of body.split('\n')) {
+    const match = TAG_LINE.exec(line);
+    if (match?.[1]) {
+      for (const tag of match[1].split(/\s+/)) {
+        const value = tag.slice(1);
+        if (value && !tags.includes(value)) tags.push(value);
+      }
+      continue;
+    }
+    rest.push(line);
+  }
+
+  return { tags, rest: rest.join('\n').trim() };
+}
+
+/** ノート全体に出てくるタグを、使われた回数の多い順に返す */
+export function collectTags(entries: readonly ParsedNoteEntry[]): { tag: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    for (const tag of entry.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
 /**
@@ -137,15 +174,17 @@ export function parseEntries(markdown: string): ParsedNoteEntry[] {
     const rawBody = bodyLines.join('\n');
     const createdAt = /<sub>([^<]+)<\/sub>/.exec(rawBody)?.[1]?.trim();
 
+    // 時刻・アンカー・タグは表示用の本文から外す。読み返すときに邪魔になる
+    const { tags, rest } = extractTags(
+      rawBody.replace(/<sub>[\s\S]*?<\/sub>/g, '').replace(/<!--[\s\S]*?-->/g, ''),
+    );
+
     entries.push({
       anchor,
       heading,
       quote: quoteLines.join('\n').trim(),
-      // 時刻とアンカーは表示用の本文から外す。読み返すときに邪魔になる
-      body: rawBody
-        .replace(/<sub>[\s\S]*?<\/sub>/g, '')
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .trim(),
+      body: rest,
+      tags,
       ...(createdAt ? { createdAt } : {}),
     });
   }
