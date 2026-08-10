@@ -51,7 +51,14 @@ export interface ChatRequest {
   readonly end: number;
   readonly question?: string;
   /** この問い合わせだけに効く設定（要件 3.4 のスコープ設定） */
-  readonly config?: { updateMode?: string; granularity?: string };
+  readonly config?: {
+    updateMode?: string;
+    granularity?: string;
+    notePath?: string;
+    maxContextChars?: number;
+  };
+  /** 使うモデル。省略すると SDK の既定に従う */
+  readonly model?: string;
 }
 
 /** SSE を読み、イベントに戻して流す */

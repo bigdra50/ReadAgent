@@ -26,6 +26,7 @@ function memoryLibrary(books: { id: string; title: string; notes: string }[]): L
           maxContextChars: 8000,
         },
         notes: createMemoryNoteStore(book.notes),
+        notesAt: () => createMemoryNoteStore(book.notes),
         load: () =>
           Promise.resolve({
             document: { pageCount: 0, pages: [], toc: [] },

@@ -33,6 +33,8 @@ export function memoryLibrary(books: readonly MemoryBook[]): Library & {
       ref: { id: book.id, title: book.title },
       config: { ...DEFAULT_NOTE_CONFIG, ...book.config },
       notes: store,
+      // メモリ上では位置を分けない。HTTP の振る舞いを見るのが目的のため
+      notesAt: () => store,
       load: () =>
         Promise.resolve({
           document: book.document ?? emptyDocument,

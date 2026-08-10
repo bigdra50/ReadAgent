@@ -13,6 +13,7 @@ import { NotePane } from './components/NotePane';
 import { SearchPane } from './components/SearchPane';
 import { SplitView } from './components/SplitView';
 import { type SelectionRange, TextLayer } from './components/TextLayer';
+import { ViewSettings } from './components/ViewSettings';
 import {
   type BookRef,
   type DocumentSummary,
@@ -25,11 +26,22 @@ import {
 } from './lib/api';
 import { NARROW_QUERY, useMediaQuery } from './lib/media';
 import { fetchNoteEntries, type ParsedNoteEntry, type ParsedNoteSummary } from './lib/notes';
+import {
+  isLastPages,
+  isPaneState,
+  isThemeChoice,
+  isZoom,
+  type LastPages,
+  type PaneState,
+  type SidePaneChoice,
+  type ThemeChoice,
+  usePersistentState,
+} from './lib/preferences';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
-const SCALE = 1.4;
-type SidePane = 'chat' | 'notes' | 'search' | null;
+const DEFAULT_ZOOM = 1.4;
+type SidePane = SidePaneChoice;
 
 export function App() {
   const [books, setBooks] = useState<readonly BookRef[]>([]);
@@ -51,11 +63,33 @@ export function App() {
   const [noteStatus, setNoteStatus] = useState<'idle' | 'updating' | 'failed'>('idle');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // 表示の好みは保存する（ADR-0010）
+  const [zoom, setZoom] = usePersistentState<number>('zoom', DEFAULT_ZOOM, isZoom);
+  const [theme, setTheme] = usePersistentState<ThemeChoice>('theme', 'system', isThemeChoice);
+  const [lastPages, setLastPages] = usePersistentState<LastPages>('last-pages', {}, isLastPages);
+  // 続きのページは「開いた瞬間の最新」を読めればよい。依存に入れると
+  // ページを繰るたびに書籍の読み込みからやり直しになる
+  const lastPagesRef = useRef(lastPages);
+  lastPagesRef.current = lastPages;
+
   // 狭い画面ではペインがオーバーレイになる。開いたまま始めると本文が隠れる（要件 4）
   const narrow = useMediaQuery(NARROW_QUERY);
-  const [showToc, setShowToc] = useState(() => !window.matchMedia(NARROW_QUERY).matches);
-  const [sidePane, setSidePane] = useState<SidePane>(() =>
-    window.matchMedia(NARROW_QUERY).matches ? null : 'chat',
+  // 保存された好みが無いときの初期値にだけ使う。以降の広い/狭いは narrow で見る
+  const [narrowAtStart] = useState(() => window.matchMedia(NARROW_QUERY).matches);
+  const [panes, setPanes] = usePersistentState<PaneState>(
+    'panes',
+    { toc: !narrowAtStart, side: narrowAtStart ? null : 'chat' },
+    isPaneState,
+  );
+  const showToc = panes.toc;
+  const sidePane: SidePane = panes.side;
+  const setShowToc = useCallback(
+    (next: boolean) => setPanes((current) => ({ ...current, toc: next })),
+    [setPanes],
+  );
+  const setSidePane = useCallback(
+    (next: SidePane) => setPanes((current) => ({ ...current, side: next })),
+    [setPanes],
   );
 
   const openToc = useCallback(
@@ -63,7 +97,7 @@ export function App() {
       setShowToc(next);
       if (next && narrow) setSidePane(null);
     },
-    [narrow],
+    [narrow, setShowToc, setSidePane],
   );
 
   const openSide = useCallback(
@@ -71,17 +105,28 @@ export function App() {
       setSidePane(next);
       if (next && narrow) setShowToc(false);
     },
-    [narrow],
+    [narrow, setShowToc, setSidePane],
   );
+
+  // 配色は data-theme で切り替える。未指定なら CSS 側が OS の設定に従う
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const wasNarrow = useRef(narrow);
   useEffect(() => {
     if (narrow && !wasNarrow.current) {
+      // 広い→狭いへ変わった瞬間。開いていたペインは本文を覆うので畳む
       setShowToc(false);
       setSidePane(null);
+    } else if (narrow && panes.toc && panes.side !== null) {
+      // 狭い画面で開き直した場合。重なったままだと本文が完全に隠れる（要件 4）
+      setShowToc(false);
     }
     wasNarrow.current = narrow;
-  }, [narrow]);
+  }, [narrow, panes.toc, panes.side, setShowToc, setSidePane]);
 
   useEffect(() => {
     fetchBooks()
@@ -104,7 +149,13 @@ export function App() {
 
     fetchDocument(bookId)
       .then((loaded) => {
-        if (!cancelled) setSummary(loaded);
+        if (cancelled) return;
+        setSummary(loaded);
+        // 前回の続きから開く。範囲外なら1ページ目に落とす
+        const remembered = lastPagesRef.current[bookId];
+        if (remembered && remembered >= 1 && remembered <= loaded.pageCount) {
+          setPageNumber(remembered);
+        }
       })
       .catch((e: unknown) => setError(String(e)));
     getDocument({ url: pdfFileUrl(bookId) })
@@ -138,7 +189,7 @@ export function App() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!page || !canvas) return;
-    const viewport = page.getViewport({ scale: SCALE });
+    const viewport = page.getViewport({ scale: zoom });
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const context = canvas.getContext('2d');
@@ -147,7 +198,7 @@ export function App() {
     return () => {
       task.cancel();
     };
-  }, [page]);
+  }, [page, zoom]);
 
   const reloadNotes = useCallback(() => {
     if (!bookId) return;
@@ -218,11 +269,15 @@ export function App() {
     setPendingJump(null);
   }, [pdf, pendingJump, jumpTo]);
 
-  const goToPage = useCallback((next: number) => {
-    setPageNumber(next);
-    setHighlight(null);
-    setSelection(null);
-  }, []);
+  const goToPage = useCallback(
+    (next: number) => {
+      setPageNumber(next);
+      setHighlight(null);
+      setSelection(null);
+      if (bookId) setLastPages((current) => ({ ...current, [bookId]: next }));
+    },
+    [bookId, setLastPages],
+  );
 
   const quote =
     pageText && selection ? renderQuote(pageText, selection.start, selection.end) : null;
@@ -268,6 +323,7 @@ export function App() {
         >
           検索
         </button>
+        <ViewSettings zoom={zoom} onZoom={setZoom} theme={theme} onTheme={setTheme} />
         <span className="muted app-hint">⌘I ノート / ⌘K 検索 / ⌘B 目次</span>
       </header>
 
@@ -314,7 +370,7 @@ export function App() {
                 <TextLayer
                   page={page}
                   pageNumber={pageNumber}
-                  scale={SCALE}
+                  scale={zoom}
                   highlight={highlight}
                   onSelect={setSelection}
                 />

@@ -16,7 +16,10 @@ import { searchNotes } from './search.js';
 export const HOST = '127.0.0.1';
 export const DEFAULT_PORT = 5174;
 
-type AskInput = Pick<Parameters<typeof askAboutSelection>[0], 'context' | 'budget' | 'notes'> & {
+type AskInput = Pick<
+  Parameters<typeof askAboutSelection>[0],
+  'context' | 'budget' | 'notes' | 'model'
+> & {
   readonly signal: AbortSignal;
 };
 
@@ -184,11 +187,14 @@ async function handleBookRoute({ req, res, json, book, rest, ask, summarize }: B
     const controller = new AbortController();
     res.on('close', () => controller.abort());
 
-    const { context, budget, noteContext, updateMode, granularity } = buildContext(
+    const { context, budget, noteContext, updateMode, granularity, notePath } = buildContext(
       pageText,
       parsed,
       book.config,
     );
+
+    // notePath を一時上書きされていれば、その位置のノートへ書く
+    const recorder = notePath === book.config.notePath ? book.notes : book.notesAt(notePath);
 
     return streamEvents(
       res,
@@ -196,7 +202,8 @@ async function handleBookRoute({ req, res, json, book, rest, ask, summarize }: B
         context,
         budget,
         signal: controller.signal,
-        notes: { updateMode, granularity, recorder: book.notes, context: noteContext },
+        notes: { updateMode, granularity, recorder, context: noteContext },
+        ...(parsed.model ? { model: parsed.model } : {}),
       }),
     );
   }

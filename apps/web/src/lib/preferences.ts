@@ -85,3 +85,51 @@ export function isPaneWidths(value: unknown): value is PaneWidths {
     side > 0
   );
 }
+
+/** 表示倍率の範囲。狭すぎ・広すぎで本文が読めなくなるのを防ぐ */
+export const MIN_ZOOM = 0.6;
+export const MAX_ZOOM = 3;
+export const ZOOM_STEP = 0.2;
+
+export function isZoom(value: unknown): value is number {
+  return (
+    typeof value === 'number' && Number.isFinite(value) && value >= MIN_ZOOM && value <= MAX_ZOOM
+  );
+}
+
+export function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(value * 100) / 100));
+}
+
+export type ThemeChoice = 'system' | 'light' | 'dark';
+const THEMES: readonly ThemeChoice[] = ['system', 'light', 'dark'];
+
+export function isThemeChoice(value: unknown): value is ThemeChoice {
+  return typeof value === 'string' && (THEMES as readonly string[]).includes(value);
+}
+
+export type SidePaneChoice = 'chat' | 'notes' | 'search' | null;
+
+export interface PaneState {
+  readonly toc: boolean;
+  readonly side: SidePaneChoice;
+}
+
+export function isPaneState(value: unknown): value is PaneState {
+  if (typeof value !== 'object' || value === null) return false;
+  const { toc, side } = value as { toc?: unknown; side?: unknown };
+  return (
+    typeof toc === 'boolean' &&
+    (side === null || side === 'chat' || side === 'notes' || side === 'search')
+  );
+}
+
+/** 書籍ごとの最後に読んだページ。書籍IDをキーにする */
+export type LastPages = Readonly<Record<string, number>>;
+
+export function isLastPages(value: unknown): value is LastPages {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return Object.values(value).every(
+    (page) => typeof page === 'number' && Number.isInteger(page) && page >= 1,
+  );
+}

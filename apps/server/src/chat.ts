@@ -20,6 +20,8 @@ export interface ChatRequest {
   readonly question?: string;
   /** この問い合わせだけに効く設定（要件 3.4 のスコープ設定・UIからの一時上書き） */
   readonly config?: PartialNoteConfig;
+  /** 使うモデル。省略すると SDK の既定に従う */
+  readonly model?: string;
 }
 
 export function parseChatRequest(body: unknown): ChatRequest | { error: string } {
@@ -35,6 +37,10 @@ export function parseChatRequest(body: unknown): ChatRequest | { error: string }
   if (question !== undefined && typeof question !== 'string') {
     return { error: 'question が不正です' };
   }
+  const model = raw.model;
+  if (model !== undefined && (typeof model !== 'string' || model.trim() === '')) {
+    return { error: 'model が不正です' };
+  }
 
   // 一時上書きの検証は core のパーサに任せる。不正な値は捨てて既定に従う
   const overrides = raw.config === undefined ? {} : parsePartialNoteConfig(raw.config).config;
@@ -45,6 +51,7 @@ export function parseChatRequest(body: unknown): ChatRequest | { error: string }
     end: end as number,
     ...(typeof question === 'string' ? { question } : {}),
     ...(Object.keys(overrides).length > 0 ? { config: overrides } : {}),
+    ...(typeof model === 'string' ? { model: model.trim() } : {}),
   };
 }
 
@@ -71,6 +78,7 @@ export function buildContext(
       ...(request.question ? { question: request.question } : {}),
     },
     budget: { maxContextChars: config.maxContextChars },
+    notePath: config.notePath,
     // ノートに残す引用も、エージェントの出力ではなく本文から切り出したものを使う
     noteContext: {
       anchor: { page: request.page, start: request.start, end: request.end },
