@@ -71,6 +71,7 @@ export function buildContext(
       ...(request.question ? { question: request.question } : {}),
     },
     updateMode: config.updateMode,
+    granularity: config.granularity,
   };
 }
 
