@@ -21,7 +21,7 @@ README とドキュメントに貼っている画像の撮影条件。
 | `chapters.png` | 章を選んで範囲を限定したまとめ | README / ADR-0009 |
 | `search.png` | 書籍をまたいだノートの検索 | README |
 | `settings.png` | 問い合わせ単位の一時上書き（詳細設定） | README / ADR-0010 |
-| `narrow.png` | 狭い画面でのオーバーレイ表示 | README / ADR-0010 |
+| `narrow.png` | 狭い画面でのオーバーレイ表示と、アイコンの吹き出し | README / ADR-0010 |
 
 ## 撮り直すとき
 
