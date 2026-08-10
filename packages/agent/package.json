@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Claude Agent SDK 連携。選択範囲を起点にした問い合わせとカスタムツール",
+  "description": "Claude Agent SDK \u9023\u643a\u3002\u9078\u629e\u7bc4\u56f2\u3092\u8d77\u70b9\u306b\u3057\u305f\u554f\u3044\u5408\u308f\u305b\u3068\u30ab\u30b9\u30bf\u30e0\u30c4\u30fc\u30eb",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -24,6 +24,8 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.226",
     "@readagent/core": "workspace:*",
-    "@readagent/pdf": "workspace:*"
+    "@readagent/pdf": "workspace:*",
+    "@readagent/notes": "workspace:*",
+    "zod": "4.4.3"
   }
 }

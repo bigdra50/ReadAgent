@@ -41,6 +41,9 @@ importers:
       '@readagent/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@readagent/notes':
+        specifier: workspace:*
+        version: link:../../packages/notes
       '@readagent/pdf':
         specifier: workspace:*
         version: link:../../packages/pdf
@@ -87,11 +90,23 @@ importers:
       '@readagent/core':
         specifier: workspace:*
         version: link:../core
+      '@readagent/notes':
+        specifier: workspace:*
+        version: link:../notes
       '@readagent/pdf':
         specifier: workspace:*
         version: link:../pdf
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/core: {}
+
+  packages/notes:
+    dependencies:
+      '@readagent/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/pdf:
     dependencies:
