@@ -9,10 +9,12 @@ import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookPicker } from './components/BookPicker';
 import { ChatPane } from './components/ChatPane';
+import { ChatIcon, NextIcon, NoteIcon, PrevIcon, SearchIcon, TocIcon } from './components/icons';
 import { NotePane } from './components/NotePane';
 import { SearchPane } from './components/SearchPane';
 import { SplitView } from './components/SplitView';
 import { type SelectionRange, TextLayer } from './components/TextLayer';
+import { ToolbarButton } from './components/ToolbarButton';
 import { ViewSettings } from './components/ViewSettings';
 import {
   type BookRef,
@@ -26,7 +28,9 @@ import {
 } from './lib/api';
 import { NARROW_QUERY, useMediaQuery } from './lib/media';
 import { fetchNoteEntries, type ParsedNoteEntry, type ParsedNoteSummary } from './lib/notes';
+import { MOD_KEY } from './lib/platform';
 import {
+  DEFAULT_ZOOM,
   isLastPages,
   isPaneState,
   isThemeChoice,
@@ -40,7 +44,6 @@ import {
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
-const DEFAULT_ZOOM = 1.4;
 type SidePane = SidePaneChoice;
 
 export function App() {
@@ -293,38 +296,54 @@ export function App() {
       <header className="app-header">
         <strong className="app-title">ReadAgent</strong>
         <BookPicker books={books} current={bookId} onSelect={setBookId} />
-        <button type="button" aria-pressed={showToc} onClick={() => openToc(!showToc)}>
-          目次
-        </button>
-        <button
-          type="button"
-          aria-pressed={sidePane === 'chat'}
-          onClick={() => openSide(sidePane === 'chat' ? null : 'chat')}
-        >
-          チャット
-        </button>
-        <button
-          type="button"
-          aria-pressed={sidePane === 'notes'}
-          onClick={() => openSide(sidePane === 'notes' ? null : 'notes')}
-        >
-          ノート
-          {noteStatus === 'updating' && (
-            <span className="badge" role="status" aria-label="ノートを更新中" />
-          )}
-          {noteStatus === 'failed' && (
-            <span className="badge badge-failed" role="status" aria-label="ノートの更新に失敗" />
-          )}
-        </button>
-        <button
-          type="button"
-          aria-pressed={sidePane === 'search'}
-          onClick={() => openSide(sidePane === 'search' ? null : 'search')}
-        >
-          検索
-        </button>
-        <ViewSettings zoom={zoom} onZoom={setZoom} theme={theme} onTheme={setTheme} />
-        <span className="muted app-hint">⌘I ノート / ⌘K 検索 / ⌘B 目次</span>
+
+        <fieldset className="toolbar-group">
+          <legend className="visually-hidden">ペインの表示</legend>
+          <ToolbarButton
+            label="目次"
+            hint={`${MOD_KEY}B`}
+            pressed={showToc}
+            onClick={() => openToc(!showToc)}
+          >
+            <TocIcon />
+          </ToolbarButton>
+          <ToolbarButton
+            label="チャット"
+            pressed={sidePane === 'chat'}
+            onClick={() => openSide(sidePane === 'chat' ? null : 'chat')}
+          >
+            <ChatIcon />
+          </ToolbarButton>
+          <ToolbarButton
+            label="読書ノート"
+            hint={`${MOD_KEY}I`}
+            pressed={sidePane === 'notes'}
+            onClick={() => openSide(sidePane === 'notes' ? null : 'notes')}
+            badge={
+              noteStatus === 'idle' ? undefined : (
+                <span
+                  className={noteStatus === 'failed' ? 'badge badge-failed' : 'badge'}
+                  role="status"
+                  aria-label={noteStatus === 'failed' ? 'ノートの更新に失敗' : 'ノートを更新中'}
+                />
+              )
+            }
+          >
+            <NoteIcon />
+          </ToolbarButton>
+          <ToolbarButton
+            label="ノートを探す"
+            hint={`${MOD_KEY}K`}
+            pressed={sidePane === 'search'}
+            onClick={() => openSide(sidePane === 'search' ? null : 'search')}
+          >
+            <SearchIcon />
+          </ToolbarButton>
+        </fieldset>
+
+        <div className="app-header-end">
+          <ViewSettings zoom={zoom} onZoom={setZoom} theme={theme} onTheme={setTheme} />
+        </div>
       </header>
 
       <SplitView
@@ -350,18 +369,23 @@ export function App() {
         reader={
           <>
             <div className="toolbar">
-              <button type="button" onClick={() => goToPage(Math.max(1, pageNumber - 1))}>
-                前
-              </button>
-              <span>
+              <ToolbarButton
+                label="前のページ"
+                disabled={pageNumber <= 1}
+                onClick={() => goToPage(Math.max(1, pageNumber - 1))}
+              >
+                <PrevIcon />
+              </ToolbarButton>
+              <span className="page-count">
                 {pageNumber} / {summary?.pageCount ?? '-'}
               </span>
-              <button
-                type="button"
+              <ToolbarButton
+                label="次のページ"
+                disabled={pageNumber >= (summary?.pageCount ?? pageNumber)}
                 onClick={() => goToPage(Math.min(summary?.pageCount ?? pageNumber, pageNumber + 1))}
               >
-                次
-              </button>
+                <NextIcon />
+              </ToolbarButton>
             </div>
             {error && <p className="error">{error}</p>}
             <div className="page">

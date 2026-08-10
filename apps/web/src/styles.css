@@ -4,6 +4,12 @@
   --muted: #6b7280;
   --line: #e5e7eb;
   --pane: #fafafa;
+  --hover: #eceef1;
+  --accent: #3b70c4;
+  --accent-soft: #e7eefa;
+  --danger: #c62828;
+  /* select や textarea の既定の見た目も配色に合わせる */
+  color-scheme: light;
 }
 
 /*
@@ -17,6 +23,11 @@
     --muted: #9aa1ac;
     --line: #2c3038;
     --pane: #1c1f25;
+    --hover: #262b33;
+    --accent: #7aa9e8;
+    --accent-soft: #22303f;
+    --danger: #ef6b6b;
+    color-scheme: dark;
   }
 }
 
@@ -26,6 +37,11 @@
   --muted: #9aa1ac;
   --line: #2c3038;
   --pane: #1c1f25;
+  --hover: #262b33;
+  --accent: #7aa9e8;
+  --accent-soft: #22303f;
+  --danger: #ef6b6b;
+  color-scheme: dark;
 }
 
 * {
@@ -37,6 +53,29 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: system-ui, sans-serif;
+}
+
+/* ボタンの土台。個別の見た目（アイコンボタンなど）は後段のクラスで上書きする */
+button {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: var(--hover);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .split {
@@ -69,13 +108,20 @@ body {
 
 .toolbar {
   display: flex;
-  gap: 12px;
+  gap: 4px;
   align-items: center;
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
+  z-index: 3;
   background: var(--bg);
+}
+.page-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
 }
 
 .page {
@@ -127,7 +173,7 @@ h2 {
   font-size: 13px;
 }
 .error {
-  color: #d33;
+  color: var(--danger);
   font-size: 13px;
   padding: 0 16px;
 }
@@ -186,12 +232,12 @@ blockquote {
   color: var(--muted);
 }
 .tools li[data-state="running"] {
-  border-color: #4a90d9;
-  color: #4a90d9;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .tools li[data-state="failed"] {
-  border-color: #d33;
-  color: #d33;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .answer {
@@ -210,40 +256,140 @@ blockquote {
 .app-header {
   display: flex;
   align-items: center;
+  /* 入りきらないときは折り返す。横スクロールにすると吹き出しが切れる */
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 6px 12px;
+  row-gap: 6px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--line);
   background: var(--pane);
   flex: none;
+  /* 吹き出しはヘッダーの外へ出る。ここで切ると見えなくなる */
+  overflow: visible;
 }
 .app-title {
   font-size: 13px;
-  margin-right: 8px;
+  letter-spacing: 0.01em;
+  flex: none;
 }
-.app-header button {
-  font: inherit;
-  font-size: 12px;
-  padding: 3px 10px;
-}
-.app-header button[aria-pressed="true"] {
-  border-color: #4a90d9;
-  color: #4a90d9;
-}
-.app-hint {
+.app-header-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+  flex: none;
+}
+
+/* アイコンボタンの並び。枠は個々のボタンではなく群に付ける */
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+  flex: none;
+  /* fieldset の既定を消す。枠と余白はここで決める */
+  margin: 0;
+  min-inline-size: auto;
+}
+
+.toolbar-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.toolbar-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--fg);
+}
+.toolbar-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.toolbar-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.toolbar-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+/*
+ * ホバーとフォーカスで出る吹き出し。
+ * 中身は装飾なので aria-hidden 側で読み上げから外してある。
+ */
+.tip {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+/* 触って操作する端末では、押したあとに吹き出しが残るだけなので出さない */
+@media (hover: hover) {
+  .toolbar-button:hover .tip {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+.toolbar-button:focus-visible .tip {
+  opacity: 1;
+  visibility: visible;
+}
+.tip-key {
+  font: inherit;
+  font-size: 10px;
+  opacity: 0.7;
+}
+/* 右端のボタンでは、はみ出さないよう右揃えにする */
+.app-header-end .tip {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 .badge {
-  display: inline-block;
+  position: absolute;
+  top: 3px;
+  right: 3px;
   width: 6px;
   height: 6px;
-  margin-left: 5px;
   border-radius: 50%;
-  background: #4a90d9;
+  background: var(--accent);
   animation: pulse 1.2s ease-in-out infinite;
 }
 .badge-failed {
-  background: #d33;
+  background: var(--danger);
   animation: none;
 }
 @keyframes pulse {
@@ -347,22 +493,42 @@ blockquote {
     inset: 0;
     z-index: 1;
     border: none;
+    border-radius: 0;
     padding: 0;
     background: rgb(0 0 0 / 0.35);
     cursor: default;
   }
 }
 
+/* さらに狭いとき: 名前より操作を残す */
+@media (max-width: 560px) {
+  .app-title {
+    display: none;
+  }
+  .app-header {
+    gap: 6px;
+    padding: 7px 8px;
+  }
+}
+
 /* 書籍の切り替えと検索 */
+.book-picker {
+  /* 書名は長い。ヘッダーが詰まったらここが縮む */
+  min-width: 0;
+  flex: 0 1 auto;
+}
 .book-picker select {
   font: inherit;
   font-size: 12px;
-  padding: 2px 6px;
+  width: 100%;
+  min-width: 96px;
   max-width: 220px;
+  height: 26px;
+  padding: 0 6px;
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 7px;
 }
 .book-name {
   font-size: 12px;
@@ -403,7 +569,7 @@ blockquote {
   padding: 2px 0;
 }
 .settings-mark {
-  color: #4a90d9;
+  color: var(--accent);
 }
 .request-settings label {
   display: flex;
@@ -481,8 +647,8 @@ blockquote {
   cursor: pointer;
 }
 .tag-list button[aria-pressed="true"] {
-  border-color: #4a90d9;
-  color: #4a90d9;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .entry-tags {
@@ -502,32 +668,25 @@ blockquote {
   border-radius: 4px;
 }
 
-/* 表示設定（倍率・配色） */
-.zoom {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border: none;
-  margin: 0;
+/* 表示倍率の数字。押すと既定に戻る */
+.zoom-value {
+  font: inherit;
+  font-size: 11px;
+  min-width: 40px;
+  height: 26px;
   padding: 0;
-  min-inline-size: auto;
-}
-.zoom button {
-  font: inherit;
-  font-size: 12px;
-  padding: 2px 7px;
-  min-width: 26px;
-}
-.zoom .zoom-value {
-  min-width: 48px;
+  border: none;
+  border-radius: 6px;
+  background: none;
   color: var(--muted);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
-.theme select {
-  font: inherit;
-  font-size: 12px;
-  padding: 2px 4px;
-  background: var(--bg);
+.zoom-value:hover {
+  background: var(--hover);
   color: var(--fg);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+}
+.zoom-value:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

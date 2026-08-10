@@ -1,4 +1,14 @@
-import { clampZoom, MAX_ZOOM, MIN_ZOOM, type ThemeChoice, ZOOM_STEP } from '../lib/preferences';
+import type { ComponentType } from 'react';
+import {
+  clampZoom,
+  DEFAULT_ZOOM,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  type ThemeChoice,
+  ZOOM_STEP,
+} from '../lib/preferences';
+import { AutoIcon, MinusIcon, MoonIcon, PlusIcon, SunIcon } from './icons';
+import { ToolbarButton } from './ToolbarButton';
 
 interface Props {
   readonly zoom: number;
@@ -7,49 +17,55 @@ interface Props {
   readonly onTheme: (next: ThemeChoice) => void;
 }
 
-const THEME_LABELS: { value: ThemeChoice; label: string }[] = [
-  { value: 'system', label: 'OSに従う' },
-  { value: 'light', label: '明るい' },
-  { value: 'dark', label: '暗い' },
+const THEMES: { value: ThemeChoice; label: string; icon: ComponentType }[] = [
+  { value: 'system', label: 'OSに従う', icon: AutoIcon },
+  { value: 'light', label: '明るい配色', icon: SunIcon },
+  { value: 'dark', label: '暗い配色', icon: MoonIcon },
 ];
 
 /** 表示倍率と配色。どちらも端末ごとの好みなので保存される（ADR-0010） */
 export function ViewSettings({ zoom, onZoom, theme, onTheme }: Props) {
   return (
     <>
-      <fieldset className="zoom">
+      <fieldset className="toolbar-group">
         <legend className="visually-hidden">表示倍率</legend>
-        <button
-          type="button"
-          aria-label="縮小"
+        <ToolbarButton
+          label="縮小"
           disabled={zoom <= MIN_ZOOM}
           onClick={() => onZoom(clampZoom(zoom - ZOOM_STEP))}
         >
-          −
-        </button>
-        <button type="button" className="zoom-value" onClick={() => onZoom(1.4)} title="既定に戻す">
-          {Math.round(zoom * 100)}%
-        </button>
+          <MinusIcon />
+        </ToolbarButton>
         <button
           type="button"
-          aria-label="拡大"
+          className="zoom-value"
+          aria-label={`表示倍率 ${Math.round(zoom * 100)}%。押すと既定に戻す`}
+          onClick={() => onZoom(DEFAULT_ZOOM)}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <ToolbarButton
+          label="拡大"
           disabled={zoom >= MAX_ZOOM}
           onClick={() => onZoom(clampZoom(zoom + ZOOM_STEP))}
         >
-          ＋
-        </button>
+          <PlusIcon />
+        </ToolbarButton>
       </fieldset>
 
-      <label className="theme">
-        <span className="visually-hidden">配色</span>
-        <select value={theme} onChange={(event) => onTheme(event.target.value as ThemeChoice)}>
-          {THEME_LABELS.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="toolbar-group">
+        <legend className="visually-hidden">配色</legend>
+        {THEMES.map(({ value, label, icon: Icon }) => (
+          <ToolbarButton
+            key={value}
+            label={label}
+            pressed={theme === value}
+            onClick={() => onTheme(value)}
+          >
+            <Icon />
+          </ToolbarButton>
+        ))}
+      </fieldset>
     </>
   );
 }

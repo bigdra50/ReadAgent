@@ -90,6 +90,7 @@ export function isPaneWidths(value: unknown): value is PaneWidths {
 export const MIN_ZOOM = 0.6;
 export const MAX_ZOOM = 3;
 export const ZOOM_STEP = 0.2;
+export const DEFAULT_ZOOM = 1.4;
 
 export function isZoom(value: unknown): value is number {
   return (
