@@ -1,0 +1,32 @@
+{
+  "name": "@readagent/pdf",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PDF\u304b\u3089\u30da\u30fc\u30b8\u672c\u6587\u3068\u76ee\u6b21\u3092\u53d6\u308a\u51fa\u3059\u30a2\u30c0\u30d7\u30bf",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./text": {
+      "types": "./dist/text.d.ts",
+      "default": "./dist/text.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@readagent/core": "workspace:*",
+    "pdfjs-dist": "6.2.108"
+  }
+}

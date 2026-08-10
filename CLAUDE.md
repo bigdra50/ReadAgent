@@ -11,6 +11,7 @@ ReadAgent — 技術書PDFを読みながら、気になった箇所を選択し
 | 目的 | コマンド |
 | --- | --- |
 | 一括検証（PR前に必ず） | `pnpm run verify` |
+| アプリを動かす | 別々の端末で `pnpm --filter @readagent/server start <path.pdf>` と `pnpm --filter @readagent/web dev` |
 | Lint / 整形チェック | `pnpm run lint` |
 | 整形＋自動修正 | `pnpm run format` |
 | 型チェック | `pnpm run typecheck` |
@@ -25,7 +26,9 @@ ReadAgent — 技術書PDFを読みながら、気になった箇所を選択し
 
 ```
 packages/core   ドメインモデル・設定解決。UI / Claude Agent SDK / fs / ネットワークに依存しない
-apps/*          実行形態ごとの入口（Phase 1 以降で追加）
+packages/pdf    PDFのテキスト抽出と引用の組み立て（pdf.js に依存するアダプタ）
+apps/server     ローカルHTTPサーバー。本文の提供と、今後の Agent SDK 中継
+apps/web        読書UI（React + Vite）
 docs/           要件・アーキテクチャ・ADR
 .claude/        エージェント用ハーネス（hooks / commands / agents）
 ```
@@ -41,6 +44,7 @@ docs/           要件・アーキテクチャ・ADR
 ## 規約
 
 - TypeScript / ESM / `moduleResolution: NodeNext`。**相対 import には `.js` 拡張子が必要**（`./config.js`）。
+  例外は `apps/web` だけで、こちらはバンドラ解決のため拡張子を付けない。他パッケージに持ち込まないこと。
 - `strict` に加えて `noUncheckedIndexedAccess` と `exactOptionalPropertyTypes` が有効。
   型が通らないときに `any` / `as` で黙らせない。型が合わないのは設計が合っていない兆候として扱う。
 - Lint は Biome。**警告もCIで失敗する。** ルールを無効化して通すのは最後の手段で、行う場合は理由をコメントに残す。
@@ -54,6 +58,16 @@ docs/           要件・アーキテクチャ・ADR
 - テストは**振る舞いの仕様**として書く。実装の内部構造を写経したテストは、リファクタを妨げるだけなので書かない。
 - 外部I/O（PDF読み込み、SDK呼び出し、ファイル書き込み）はコアの外に出し、境界でフェイクを差す。
   モックだらけになったら、それは設計が境界を切れていないサイン。
+
+## 踏んだ罠（同じ道を通らないために）
+
+- **pdf.js は Node でもブラウザでも `legacy` ビルドを使う。** 既定のビルドは Node では
+  DOM のグローバル（`DOMMatrix`）を要求して読み込み時に落ち、ブラウザでも
+  `Map.prototype.getOrInsertComputed` など最新すぎる機能を要求して少し前の Chromium で落ちる。
+- **ページ本文に改行を混ぜない。** 選択位置の土台が壊れる。理由と実測は
+  @docs/spike-pdf-text-anchor.md にある。引用の整形は表示するときだけ行う。
+- **テキストレイヤは React の管理外に置く。** state を持たせると選択のたびに再描画され、
+  ブラウザの選択が壊れる（ADR-0005）。
 
 ## この規模で効く判断
 
