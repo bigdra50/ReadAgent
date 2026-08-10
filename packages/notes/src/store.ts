@@ -3,13 +3,20 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
-import { appendEntry, type NoteEntryDraft } from './markdown.js';
+import {
+  appendEntry,
+  appendSummary,
+  type NoteEntryDraft,
+  type NoteSummaryDraft,
+} from './markdown.js';
 
 export interface NoteStore {
   /** ノート全文を読む。まだ無ければ空文字 */
   read(): Promise<string>;
   /** エントリを追記し、書き込んだファイルのパスを返す */
   append(entry: NoteEntryDraft): Promise<{ path: string }>;
+  /** まとめを追記する。既存のエントリは書き換えない（ADR-0009） */
+  appendSummary(summary: NoteSummaryDraft): Promise<{ path: string }>;
 }
 
 export interface FileNoteStoreOptions {
@@ -58,15 +65,18 @@ export function createFileNoteStore(options: FileNoteStoreOptions): NoteStore {
     }
   };
 
+  const write = (render: (existing: string) => string) =>
+    serialize(async () => {
+      const existing = await readOrEmpty();
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, render(existing), 'utf8');
+      return { path };
+    });
+
   return {
     read: () => serialize(readOrEmpty),
-    append: (entry) =>
-      serialize(async () => {
-        const existing = await readOrEmpty();
-        await mkdir(dirname(path), { recursive: true });
-        await writeFile(path, appendEntry(existing, entry, options.bookTitle), 'utf8');
-        return { path };
-      }),
+    append: (entry) => write((existing) => appendEntry(existing, entry, options.bookTitle)),
+    appendSummary: (summary) => write((existing) => appendSummary(existing, summary)),
   };
 }
 
@@ -78,6 +88,10 @@ export function createMemoryNoteStore(initial = ''): NoteStore & { content: () =
     read: () => Promise.resolve(content),
     append: (entry) => {
       content = appendEntry(content, entry);
+      return Promise.resolve({ path: join('memory', 'notes.md') });
+    },
+    appendSummary: (summary) => {
+      content = appendSummary(content, summary);
       return Promise.resolve({ path: join('memory', 'notes.md') });
     },
   };

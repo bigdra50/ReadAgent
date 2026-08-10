@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendEntry,
+  appendSummary,
   parseAnchors,
   parseEntries,
+  parseSummaries,
   renderAnchor,
   renderEntry,
+  renderSummary,
 } from '../src/markdown.js';
 
 const entry = {
@@ -175,5 +178,63 @@ describe('parseEntries', () => {
   it('エントリが無ければ空を返す', () => {
     expect(parseEntries('')).toEqual([]);
     expect(parseEntries('# 見出しだけ')).toEqual([]);
+  });
+});
+
+describe('まとめ（ノートの再構成）', () => {
+  const summary = {
+    fromPage: 3,
+    toPage: 12,
+    body: '第3章の要点は、記録と最適化を同時に行うこと。',
+    tags: ['jit', 'trace'],
+    createdAt: '2026-08-10T02:00:00.000Z',
+  };
+
+  it('見出しに対象ページの範囲を出す', () => {
+    expect(renderSummary(summary)).toContain('## まとめ p.3–12');
+  });
+
+  it('本文とタグと時刻を含める', () => {
+    const rendered = renderSummary(summary);
+
+    expect(rendered).toContain('記録と最適化を同時に行う');
+    expect(rendered).toContain('#jit #trace');
+    expect(rendered).toContain('2026-08-10T02:00:00.000Z');
+  });
+
+  it('既存のノートを書き換えず末尾に足す（ADR-0009）', () => {
+    const note = appendEntry('', entry, '本');
+    const withSummary = appendSummary(note, summary);
+
+    expect(withSummary).toContain('## p.12 なぜガードが要る？');
+    expect(withSummary.indexOf('## p.12')).toBeLessThan(withSummary.indexOf('## まとめ'));
+    expect(parseEntries(withSummary)).toHaveLength(1);
+  });
+
+  it('まとめを読み戻せる', () => {
+    const parsed = parseSummaries(appendSummary('', summary));
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.fromPage).toBe(3);
+    expect(parsed[0]?.toPage).toBe(12);
+    expect(parsed[0]?.body).toContain('記録と最適化');
+    expect(parsed[0]?.createdAt).toBe('2026-08-10T02:00:00.000Z');
+  });
+
+  it('まとめは読書エントリとして数えない', () => {
+    const note = appendSummary(appendEntry('', entry, '本'), summary);
+
+    expect(parseEntries(note)).toHaveLength(1);
+    expect(parseSummaries(note)).toHaveLength(1);
+  });
+
+  it('まとめが無いノートでは空を返す', () => {
+    expect(parseSummaries(appendEntry('', entry, '本'))).toEqual([]);
+  });
+
+  it('図解を含むまとめもそのまま残す', () => {
+    const withDiagram = { ...summary, body: '説明\n\n```mermaid\ngraph TD\n  A-->B\n```' };
+
+    expect(parseSummaries(appendSummary('', withDiagram))[0]?.body).toContain('graph TD');
   });
 });

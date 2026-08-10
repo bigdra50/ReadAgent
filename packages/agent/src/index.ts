@@ -6,3 +6,5 @@ export type { NoteRecorder, NoteToolContext, NoteToolDefinition, NoteToolServer 
 export { createNoteToolServer, NOTE_SERVER_NAME, NOTE_TOOL_ID, NOTE_TOOL_NAME } from './notes.js';
 export type { PromptBudget, SelectionContext } from './prompt.js';
 export { buildSelectionPrompt, GRANULARITY_GUIDANCE, SYSTEM_PROMPT } from './prompt.js';
+export type { SummarizeOptions, SummarizeRecorder } from './summarize.js';
+export { buildSummaryPrompt, SUMMARY_SYSTEM_PROMPT, summarizeNotes } from './summarize.js';

@@ -12,6 +12,10 @@
     "./markdown": {
       "types": "./dist/markdown.d.ts",
       "default": "./dist/markdown.js"
+    },
+    "./blocks": {
+      "types": "./dist/blocks.d.ts",
+      "default": "./dist/blocks.js"
     }
   },
   "main": "./dist/index.js",
