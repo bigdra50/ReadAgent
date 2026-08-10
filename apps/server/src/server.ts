@@ -1,43 +1,19 @@
 /**
  * ローカル完結版のサーバー（ADR-0004）。
  *
- * PDFの本文・目次の提供と、選択範囲を起点にしたエージェントへの中継を担う。
- * Agent SDK をこのプロセスに載せる理由は ADR-0004 にある。
- *
- * 読み込みは引数で差し替えられるようにしてある。HTTP の振る舞いを、
- * 実ファイルと pdf.js を用意せずに検証できるようにするため。
+ * 書籍の提供・ノート・エージェントへの中継を担う。
+ * 書籍の探索は Library に、エージェント呼び出しは AskFn に閉じてあり、
+ * どちらも差し替えられる。ローカル完結と将来のサーバー化を両立するための境界（ADR-0003）。
  */
-
-import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { type AgentEvent, askAboutSelection } from '@readagent/agent';
-import type { PartialNoteConfig } from '@readagent/core';
-import type { NoteStore } from '@readagent/notes';
-import { type ExtractedDocument, extractDocument } from '@readagent/pdf';
 import { buildContext, parseChatRequest, streamEvents } from './chat.js';
+import type { BookHandle, Library } from './library.js';
+import { searchNotes } from './search.js';
 
 /** ローカル完結が前提。認証を入れるまで外に出さない（ADR-0004） */
 export const HOST = '127.0.0.1';
 export const DEFAULT_PORT = 5174;
-
-export interface LoadedDocument {
-  readonly document: ExtractedDocument;
-  readonly bytes: Uint8Array;
-}
-
-export type DocumentLoader = () => Promise<LoadedDocument>;
-
-/** 抽出は重いので一度だけ行い、プロセスの生存期間中は使い回す */
-export function createFileDocumentLoader(pdfPath: string): DocumentLoader {
-  let cached: Promise<LoadedDocument> | null = null;
-  return () => {
-    cached ??= (async () => {
-      const bytes = new Uint8Array(await readFile(pdfPath));
-      return { document: await extractDocument(bytes), bytes };
-    })();
-    return cached;
-  };
-}
 
 type AskInput = Pick<Parameters<typeof askAboutSelection>[0], 'context' | 'budget' | 'notes'> & {
   readonly signal: AbortSignal;
@@ -49,11 +25,7 @@ export type AskFn = (input: AskInput) => AsyncIterable<AgentEvent>;
 const defaultAsk: AskFn = (input) => askAboutSelection(input);
 
 export interface ServerDeps {
-  readonly loadDocument: DocumentLoader;
-  /** ノートの保存先。省略するとノートを更新しない */
-  readonly notes?: NoteStore;
-  /** ノート設定の上書き。既定値は resolveNoteConfig が持つ */
-  readonly noteConfig?: PartialNoteConfig;
+  readonly library: Library;
   readonly ask?: AskFn;
 }
 
@@ -70,9 +42,16 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server {
-  const resolved: ServerDeps = typeof deps === 'function' ? { loadDocument: deps } : deps;
-  const { loadDocument, notes, noteConfig, ask = defaultAsk } = resolved;
+/** `/api/books/:id/...` から書籍IDと残りのパスを取り出す */
+function matchBookRoute(pathname: string): { id: string; rest: string } | null {
+  const match = /^\/api\/books\/([^/]+)(\/.*)?$/.exec(pathname);
+  const id = match?.[1];
+  if (!id) return null;
+  return { id: decodeURIComponent(id), rest: match?.[2] ?? '' };
+}
+
+export function createReadAgentServer(deps: ServerDeps): Server {
+  const { library, ask = defaultAsk } = deps;
 
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${HOST}`);
@@ -86,67 +65,93 @@ export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server
         return json(200, { ok: true });
       }
 
-      if (url.pathname === '/api/document') {
-        const { document } = await loadDocument();
-        return json(200, { pageCount: document.pageCount, toc: document.toc });
+      if (url.pathname === '/api/books') {
+        return json(200, { books: await library.list() });
       }
 
-      const pageMatch = /^\/api\/document\/pages\/(\d+)$/.exec(url.pathname);
-      if (pageMatch?.[1]) {
-        const { document } = await loadDocument();
-        const page = document.pages[Number(pageMatch[1]) - 1];
-        return page ? json(200, page) : json(404, { error: 'page not found' });
+      if (url.pathname === '/api/search') {
+        const hits = await searchNotes(library, url.searchParams.get('q') ?? '');
+        return json(200, { hits });
       }
 
-      if (url.pathname === '/api/notes') {
-        // ノートペインは読書中いつでも開ける（要件 4）。無ければ空で返す
-        const markdown = notes ? await notes.read() : '';
-        return json(200, { markdown });
-      }
+      const route = matchBookRoute(url.pathname);
+      if (!route) return json(404, { error: 'not found' });
 
-      if (url.pathname === '/api/chat' && req.method === 'POST') {
-        const parsed = parseChatRequest(await readJsonBody(req));
-        if ('error' in parsed) return json(400, parsed);
+      const book = await library.get(route.id);
+      if (!book) return json(404, { error: 'book not found' });
 
-        const { document } = await loadDocument();
-        const pageText = document.pages[parsed.page - 1];
-        if (!pageText) return json(404, { error: 'page not found' });
-
-        // 読者が画面を閉じた・次の質問に移った時点で、走っている問い合わせを止める。
-        // 監視するのは req ではなく res。本文を読み切った時点で req の close は
-        // すでに発火しており、そこに登録しても切断を拾えない。
-        const controller = new AbortController();
-        res.on('close', () => controller.abort());
-
-        const { context, budget, noteContext, updateMode, granularity } = buildContext(
-          pageText,
-          parsed,
-          noteConfig,
-        );
-        return streamEvents(
-          res,
-          ask({
-            context,
-            budget,
-            signal: controller.signal,
-            ...(notes
-              ? { notes: { updateMode, granularity, recorder: notes, context: noteContext } }
-              : {}),
-          }),
-        );
-      }
-
-      if (url.pathname === '/api/document/file') {
-        const { bytes } = await loadDocument();
-        res.writeHead(200, { 'content-type': 'application/pdf' });
-        return res.end(bytes);
-      }
-
-      return json(404, { error: 'not found' });
+      return await handleBookRoute({ req, res, json, book, rest: route.rest, ask });
     } catch (error) {
-      // 抽出の失敗でプロセスを落とさない。読書側でリトライできるようにする（要件 5）
+      // 1冊の読み込み失敗でプロセスを落とさない。読書側でリトライできるようにする（要件 5）
       const message = error instanceof Error ? error.message : String(error);
       return json(500, { error: message });
     }
   });
+}
+
+interface BookRouteInput {
+  readonly req: IncomingMessage;
+  readonly res: import('node:http').ServerResponse;
+  readonly json: (status: number, body: unknown) => void;
+  readonly book: BookHandle;
+  readonly rest: string;
+  readonly ask: AskFn;
+}
+
+async function handleBookRoute({ req, res, json, book, rest, ask }: BookRouteInput) {
+  if (rest === '/document' || rest === '') {
+    const { document } = await book.load();
+    return json(200, { ...book.ref, pageCount: document.pageCount, toc: document.toc });
+  }
+
+  const pageMatch = /^\/pages\/(\d+)$/.exec(rest);
+  if (pageMatch?.[1]) {
+    const { document } = await book.load();
+    const page = document.pages[Number(pageMatch[1]) - 1];
+    return page ? json(200, page) : json(404, { error: 'page not found' });
+  }
+
+  if (rest === '/file') {
+    const { bytes } = await book.load();
+    res.writeHead(200, { 'content-type': 'application/pdf' });
+    return res.end(bytes);
+  }
+
+  if (rest === '/notes') {
+    // ノートペインは読書中いつでも開ける（要件 4）
+    return json(200, { markdown: await book.notes.read() });
+  }
+
+  if (rest === '/chat' && req.method === 'POST') {
+    const parsed = parseChatRequest(await readJsonBody(req));
+    if ('error' in parsed) return json(400, parsed);
+
+    const { document } = await book.load();
+    const pageText = document.pages[parsed.page - 1];
+    if (!pageText) return json(404, { error: 'page not found' });
+
+    // 読者が画面を閉じた・次の質問に移った時点で、走っている問い合わせを止める。
+    // 監視するのは req ではなく res。本文を読み切った時点で req の close は
+    // すでに発火しており、そこに登録しても切断を拾えない。
+    const controller = new AbortController();
+    res.on('close', () => controller.abort());
+
+    const { context, budget, noteContext, updateMode, granularity } = buildContext(
+      pageText,
+      parsed,
+      book.config,
+    );
+
+    return streamEvents(
+      res,
+      ask({
+        context,
+        budget,
+        signal: controller.signal,
+        notes: { updateMode, granularity, recorder: book.notes, context: noteContext },
+      }),
+    );
+  }
+
+  return json(404, { error: 'not found' });
 }

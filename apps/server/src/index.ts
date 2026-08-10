@@ -1,35 +1,40 @@
-/** CLI の入口。引数の解釈と listen だけを担当する（HTTP の中身は server.ts） */
-import { basename, dirname, extname } from 'node:path';
-import { createFileNoteStore } from '@readagent/notes';
-import { loadNoteConfig } from './config.js';
-import { createFileDocumentLoader, createReadAgentServer, DEFAULT_PORT, HOST } from './server.js';
+/**
+ * CLI の入口。引数の解釈と listen だけを担当する（HTTP の中身は server.ts）。
+ *
+ * 引数には PDF か、PDF を並べたディレクトリを渡す。
+ * 1冊だけ読むときも複数冊のときも、扱いは同じ Library に寄せてある。
+ */
+import { createFileLibrary, isDirectory, isReadablePdf } from './library.js';
+import { createReadAgentServer, DEFAULT_PORT, HOST } from './server.js';
 
-const pdfPath = process.argv[2] ?? process.env.READAGENT_PDF;
-if (!pdfPath) {
-  process.stderr.write('使い方: readagent-server <path-to.pdf>\n');
+const target = process.argv[2] ?? process.env.READAGENT_PDF;
+if (!target) {
+  process.stderr.write('使い方: readagent-server <path-to.pdf | 書籍のディレクトリ>\n');
   process.exit(1);
 }
 
-// グローバル → 書籍 → スコープ の順に解決する（要件 3.4）
-const { config, sources, issues } = await loadNoteConfig({ bookPath: pdfPath });
-for (const issue of issues) {
-  process.stderr.write(`設定の警告: ${issue}\n`);
+const library = (await isDirectory(target))
+  ? createFileLibrary({ dir: target })
+  : (await isReadablePdf(target))
+    ? createFileLibrary({ paths: [target] })
+    : null;
+
+if (!library) {
+  process.stderr.write(`PDF でもディレクトリでもありません: ${target}\n`);
+  process.exit(1);
 }
 
-// ノートは書籍と同じディレクトリに置く。読書記録が書籍の隣にあるほうが探しやすい。
-const notes = createFileNoteStore({
-  baseDir: dirname(pdfPath),
-  notePath: config.notePath,
-  bookTitle: basename(pdfPath, extname(pdfPath)),
-});
+const books = await library.list();
+if (books.length === 0) {
+  process.stderr.write(`書籍が見つかりません: ${target}\n`);
+  process.exit(1);
+}
 
 const port = Number(process.env.READAGENT_PORT ?? DEFAULT_PORT);
-createReadAgentServer({
-  loadDocument: createFileDocumentLoader(pdfPath),
-  notes,
-  noteConfig: config,
-}).listen(port, HOST, () => {
-  process.stdout.write(`ReadAgent server: http://${HOST}:${port}  (${pdfPath})\n`);
-  process.stdout.write(`ノート: ${config.notePath} / 更新モード: ${config.updateMode}\n`);
-  process.stdout.write(`設定の層: ${sources.length > 0 ? sources.join(' → ') : '既定値のみ'}\n`);
+createReadAgentServer({ library }).listen(port, HOST, () => {
+  process.stdout.write(`ReadAgent server: http://${HOST}:${port}\n`);
+  process.stdout.write(`書籍 ${books.length} 冊:\n`);
+  for (const book of books) {
+    process.stdout.write(`  - ${book.title} (${book.id})\n`);
+  }
 });
