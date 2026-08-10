@@ -7,7 +7,7 @@
  */
 import type { ServerResponse } from 'node:http';
 import type { AgentEvent } from '@readagent/agent';
-import { type PartialNoteConfig, resolveNoteConfig } from '@readagent/core';
+import { type PartialNoteConfig, parsePartialNoteConfig, resolveNoteConfig } from '@readagent/core';
 import { type PageText, renderQuote, sliceRange } from '@readagent/pdf';
 
 /** 選択の前後から拾う文脈の量。予算の残りに収まる範囲で使う */
@@ -18,6 +18,8 @@ export interface ChatRequest {
   readonly start: number;
   readonly end: number;
   readonly question?: string;
+  /** この問い合わせだけに効く設定（要件 3.4 のスコープ設定・UIからの一時上書き） */
+  readonly config?: PartialNoteConfig;
 }
 
 export function parseChatRequest(body: unknown): ChatRequest | { error: string } {
@@ -34,11 +36,15 @@ export function parseChatRequest(body: unknown): ChatRequest | { error: string }
     return { error: 'question が不正です' };
   }
 
+  // 一時上書きの検証は core のパーサに任せる。不正な値は捨てて既定に従う
+  const overrides = raw.config === undefined ? {} : parsePartialNoteConfig(raw.config).config;
+
   return {
     page: page as number,
     start: start as number,
     end: end as number,
     ...(typeof question === 'string' ? { question } : {}),
+    ...(Object.keys(overrides).length > 0 ? { config: overrides } : {}),
   };
 }
 
@@ -50,9 +56,10 @@ export function parseChatRequest(body: unknown): ChatRequest | { error: string }
 export function buildContext(
   pageText: PageText,
   request: ChatRequest,
-  overrides?: PartialNoteConfig,
+  bookConfig?: PartialNoteConfig,
 ) {
-  const config = resolveNoteConfig(overrides);
+  // 書籍までの解決結果に、この問い合わせだけの上書きを重ねる（後勝ち）
+  const config = resolveNoteConfig(bookConfig, request.config);
   const quote = renderQuote(pageText, request.start, request.end);
 
   return {

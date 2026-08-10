@@ -38,6 +38,29 @@ describe('parseChatRequest', () => {
     expect(parseChatRequest({ page: 1, start: 0, end: 5 })).toEqual({ page: 1, start: 0, end: 5 });
   });
 
+  it('一時上書きの設定を受け取る', () => {
+    const parsed = parseChatRequest({
+      page: 1,
+      start: 0,
+      end: 5,
+      config: { updateMode: 'always' },
+    });
+
+    expect(parsed).toMatchObject({ config: { updateMode: 'always' } });
+  });
+
+  it('一時上書きの不正な値は捨てて、問い合わせ自体は通す', () => {
+    const parsed = parseChatRequest({
+      page: 1,
+      start: 0,
+      end: 5,
+      config: { updateMode: 'ときどき', granularity: 'summary' },
+    });
+
+    expect(parsed).toMatchObject({ config: { granularity: 'summary' } });
+    expect(parsed).not.toHaveProperty('error');
+  });
+
   it('壊れた入力は理由つきで弾く', () => {
     expect(parseChatRequest(null)).toHaveProperty('error');
     expect(parseChatRequest({ page: 0, start: 0, end: 1 })).toHaveProperty('error');
