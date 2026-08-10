@@ -8,7 +8,7 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { type AgentEvent, askAboutSelection, summarizeNotes } from '@readagent/agent';
 import { parseEntries } from '@readagent/notes';
-import { buildContext, parseChatRequest, streamEvents } from './chat.js';
+import { buildContext, parseChatRequest, parseSummarizeRequest, streamEvents } from './chat.js';
 import type { BookHandle, Library } from './library.js';
 import { searchNotes } from './search.js';
 
@@ -142,7 +142,19 @@ async function handleBookRoute({ req, res, json, book, rest, ask, summarize }: B
   }
 
   if (rest === '/summarize' && req.method === 'POST') {
-    const entries = parseEntries(await book.notes.read());
+    const range = parseSummarizeRequest(await readJsonBody(req));
+    if ('error' in range) return json(400, range);
+
+    const all = parseEntries(await book.notes.read());
+    // 範囲が指定されていれば、その章のエントリだけをまとめる
+    const entries = range.fromPage
+      ? all.filter(
+          (entry) =>
+            entry.anchor.page >= (range.fromPage ?? 0) &&
+            entry.anchor.page <= (range.toPage ?? Number.POSITIVE_INFINITY),
+        )
+      : all;
+
     const controller = new AbortController();
     res.on('close', () => controller.abort());
 
@@ -150,7 +162,7 @@ async function handleBookRoute({ req, res, json, book, rest, ask, summarize }: B
       res,
       summarize({
         entries,
-        bookTitle: book.ref.title,
+        bookTitle: range.title ? `${book.ref.title} / ${range.title}` : book.ref.title,
         recorder: book.notes,
         maxContextChars: book.config.maxContextChars,
         signal: controller.signal,

@@ -111,3 +111,35 @@ export async function streamEvents(
     if (!res.writableEnded) res.end();
   }
 }
+
+export interface SummarizeRequest {
+  /** 1 始まり。省略するとノート全体をまとめる */
+  readonly fromPage?: number;
+  readonly toPage?: number;
+  /** 章の名前。まとめの見出しに使う */
+  readonly title?: string;
+}
+
+export function parseSummarizeRequest(body: unknown): SummarizeRequest | { error: string } {
+  if (body === null || body === undefined) return {};
+  if (typeof body !== 'object') return { error: 'リクエストが不正です' };
+
+  const raw = body as Record<string, unknown>;
+  const { fromPage, toPage, title } = raw;
+
+  if (fromPage === undefined && toPage === undefined) {
+    return typeof title === 'string' ? { title } : {};
+  }
+  if (!Number.isInteger(fromPage) || (fromPage as number) < 1) {
+    return { error: 'fromPage が不正です' };
+  }
+  if (!Number.isInteger(toPage) || (toPage as number) < (fromPage as number)) {
+    return { error: 'toPage が不正です' };
+  }
+
+  return {
+    fromPage: fromPage as number,
+    toPage: toPage as number,
+    ...(typeof title === 'string' ? { title } : {}),
+  };
+}
