@@ -27,6 +27,7 @@ ReadAgent — 技術書PDFを読みながら、気になった箇所を選択し
 ```
 packages/core   ドメインモデル・設定解決。UI / Claude Agent SDK / fs / ネットワークに依存しない
 packages/pdf    PDFのテキスト抽出と引用の組み立て（pdf.js に依存するアダプタ）
+packages/agent  Claude Agent SDK 連携。プロンプト組み立てとイベント変換
 apps/server     ローカルHTTPサーバー。本文の提供と、今後の Agent SDK 中継
 apps/web        読書UI（React + Vite）
 docs/           要件・アーキテクチャ・ADR
@@ -68,6 +69,10 @@ docs/           要件・アーキテクチャ・ADR
   @docs/spike-pdf-text-anchor.md にある。引用の整形は表示するときだけ行う。
 - **テキストレイヤは React の管理外に置く。** state を持たせると選択のたびに再描画され、
   ブラウザの選択が壊れる（ADR-0005）。
+- **選択が解除されても直前の選択を保持する。** 質問欄にフォーカスを移した瞬間に
+  ブラウザの選択は消える。そこで選択を null にすると、質問が送れなくなる。
+- **SDK のメッセージ型に構造ごと依存しない。** `toAgentEvents` は `unknown` を受けて
+  必要な部分だけを実行時に確かめる。種類が増えても UI もテストも壊れないようにするため。
 
 ## この規模で効く判断
 
