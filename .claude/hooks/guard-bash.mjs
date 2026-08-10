@@ -18,7 +18,7 @@ const command = payload.tool_input?.command ?? '';
 const rules = [
   {
     // pnpm ワークスペースなので他のパッケージマネージャは lockfile を壊す
-    pattern: /(^|[;&|]\s*)(npm|yarn)\s+(i|install|add|ci|remove|up|update)\b/,
+    pattern: /(^|[;&|\n]\s*)(npm|yarn)\s+(i|install|add|ci|remove|up|update)\b/,
     message: 'このリポジトリは pnpm ワークスペースです。npm/yarn ではなく pnpm を使ってください。',
   },
   {
@@ -31,11 +31,11 @@ const rules = [
     message: 'main ブランチへの直接の commit/push は行わず、作業ブランチを使ってください。',
   },
   {
-    pattern: /(^|[;&|]\s*)rm\s+(-[a-zA-Z]*\s+)*-?[a-zA-Z]*[rR][a-zA-Z]*f?\s+(\/|~|\$HOME)(\s|$)/,
+    pattern: /(^|[;&|\n]\s*)rm\s+(-[a-zA-Z]*\s+)*-?[a-zA-Z]*[rR][a-zA-Z]*f?\s+(\/|~|\$HOME)(\s|$)/,
     message: 'ホーム/ルート配下の再帰削除は危険です。対象パスを限定してください。',
   },
   {
-    pattern: /(^|[;&|]\s*)(cat|less|head|tail|grep)\s+[^|;&]*\.env(\s|$|\.)/,
+    pattern: /(^|[;&|\n]\s*)(cat|less|head|tail|grep)\s+[^|;&]*\.env(\s|$|\.)/,
     message: '.env は秘匿情報です。必要な変数名は .env.example を参照してください。',
   },
 ];
