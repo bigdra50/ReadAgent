@@ -1,4 +1,4 @@
-import type { TocEntry } from '@readagent/core';
+import type { NoteConfig, TocEntry } from '@readagent/core';
 import type { NoteAnchor } from '@readagent/notes/markdown';
 import type { PageText } from '@readagent/pdf/text';
 
@@ -10,6 +10,8 @@ export interface BookRef {
 export interface DocumentSummary extends BookRef {
   readonly pageCount: number;
   readonly toc: readonly TocEntry[];
+  /** 書籍までで解決済みの設定。UI からの一時上書きの出発点になる */
+  readonly config: NoteConfig;
 }
 
 export interface PageResponse extends PageText {

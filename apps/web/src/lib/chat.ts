@@ -50,24 +50,15 @@ export interface ChatRequest {
   readonly start: number;
   readonly end: number;
   readonly question?: string;
+  /** この問い合わせだけに効く設定（要件 3.4 のスコープ設定） */
+  readonly config?: { updateMode?: string; granularity?: string };
 }
 
-/** チャットを開始し、届いたイベントを順に流す。signal で中断できる */
-export async function* streamChat(
-  bookId: string,
-  request: ChatRequest,
-  signal: AbortSignal,
-): AsyncGenerator<AgentEvent> {
-  const response = await fetch(`/api/books/${bookId}/chat`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
-    signal,
-  });
-
+/** SSE を読み、イベントに戻して流す */
+async function* readEvents(response: Response): AsyncGenerator<AgentEvent> {
   if (!response.ok || !response.body) {
     const detail = await response.text().catch(() => '');
-    throw new Error(detail || `チャットを開始できませんでした (${response.status})`);
+    throw new Error(detail || `開始できませんでした (${response.status})`);
   }
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -82,4 +73,28 @@ export async function* streamChat(
   } finally {
     await reader.cancel().catch(() => undefined);
   }
+}
+
+/** チャットを開始し、届いたイベントを順に流す。signal で中断できる */
+export async function* streamChat(
+  bookId: string,
+  request: ChatRequest,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield* readEvents(
+    await fetch(`/api/books/${bookId}/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+    }),
+  );
+}
+
+/** ノートの再構成を始め、届いたイベントを流す */
+export async function* streamSummary(
+  bookId: string,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield* readEvents(await fetch(`/api/books/${bookId}/summarize`, { method: 'POST', signal }));
 }

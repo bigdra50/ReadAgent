@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "\u8aad\u66f8UI\u3002\u76ee\u6b21\u30fb\u672c\u6587\u30fb\uff08\u4eca\u5f8c\uff09\u30c1\u30e3\u30c3\u30c8\u306e\u5206\u5272\u30d3\u30e5\u30fc",
+  "description": "読書UI。目次・本文・（今後）チャットの分割ビュー",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
@@ -12,13 +12,14 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@readagent/agent": "workspace:*",
     "@readagent/core": "workspace:*",
+    "@readagent/notes": "workspace:*",
     "@readagent/pdf": "workspace:*",
+    "mermaid": "11.16.1",
     "pdfjs-dist": "6.2.108",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "@readagent/agent": "workspace:*",
-    "@readagent/notes": "workspace:*"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/react": "19.2.18",

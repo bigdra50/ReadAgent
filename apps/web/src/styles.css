@@ -380,3 +380,70 @@ blockquote {
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+/* ノート設定の一時上書き */
+.note-settings {
+  font-size: 12px;
+  color: var(--muted);
+}
+.note-settings summary {
+  cursor: pointer;
+  padding: 2px 0;
+}
+.note-settings-mark {
+  color: #4a90d9;
+}
+.note-settings label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+.note-settings select {
+  font: inherit;
+  font-size: 12px;
+  flex: 1;
+  padding: 2px 4px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.note-settings button {
+  font: inherit;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* 図解 */
+.diagram {
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.diagram-error pre,
+.note-code {
+  font-size: 12px;
+  background: var(--pane);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  overflow-x: auto;
+}
+
+/* まとめ */
+.summaries {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+.summaries h3 {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0;
+}
+.summaries article {
+  margin-bottom: 8px;
+}

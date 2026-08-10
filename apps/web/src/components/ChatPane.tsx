@@ -1,6 +1,8 @@
 import type { AgentEvent } from '@readagent/agent';
+import type { Granularity, UpdateMode } from '@readagent/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { streamChat } from '../lib/chat';
+import { type NoteOverrides, NoteSettings } from './NoteSettings';
 import type { SelectionRange } from './TextLayer';
 
 interface Props {
@@ -10,6 +12,8 @@ interface Props {
   /** ノート更新の状態。ヘッダーに控えめに出す（要件 4） */
   readonly onNoteStatus: (status: 'idle' | 'updating' | 'failed') => void;
   readonly onNoteUpdated: () => void;
+  /** 書籍までで解決済みのノート設定。一時上書きの出発点 */
+  readonly noteConfig: { updateMode: UpdateMode; granularity: Granularity } | null;
 }
 
 interface ToolRun {
@@ -22,11 +26,19 @@ interface ToolRun {
  * 選択箇所を起点にした深掘りチャット（要件 3.2）。
  * 走っている問い合わせは常に中断できる。読書を止めないことが前提のため（要件 5）。
  */
-export function ChatPane({ bookId, selection, quote, onNoteStatus, onNoteUpdated }: Props) {
+export function ChatPane({
+  bookId,
+  selection,
+  quote,
+  onNoteStatus,
+  onNoteUpdated,
+  noteConfig,
+}: Props) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [tools, setTools] = useState<ToolRun[]>([]);
   const [status, setStatus] = useState<'idle' | 'streaming' | 'error'>('idle');
+  const [overrides, setOverrides] = useState<NoteOverrides>({});
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -87,6 +99,7 @@ export function ChatPane({ bookId, selection, quote, onNoteStatus, onNoteUpdated
         start: selection.start,
         end: selection.end,
         ...(question.trim() ? { question: question.trim() } : {}),
+        ...(Object.keys(overrides).length > 0 ? { config: overrides } : {}),
       };
       for await (const event of streamChat(bookId, request, controller.signal)) {
         applyEvent(event);
@@ -97,7 +110,7 @@ export function ChatPane({ bookId, selection, quote, onNoteStatus, onNoteUpdated
       setStatus('error');
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [applyEvent, bookId, onNoteStatus, question, selection]);
+  }, [applyEvent, bookId, onNoteStatus, overrides, question, selection]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -150,6 +163,8 @@ export function ChatPane({ bookId, selection, quote, onNoteStatus, onNoteUpdated
           ))}
         </ul>
       )}
+
+      <NoteSettings resolved={noteConfig} overrides={overrides} onChange={setOverrides} />
 
       {answer && <div className="answer">{answer}</div>}
       {status === 'streaming' && !answer && <p className="muted">考えています…</p>}
