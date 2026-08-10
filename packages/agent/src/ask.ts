@@ -5,12 +5,13 @@
  * ストリーミングと中断の振る舞いを検証するため（要件 5 のキャンセル可能性）。
  */
 import { type Options, query } from '@anthropic-ai/claude-agent-sdk';
-import type { UpdateMode } from '@readagent/core';
+import type { Granularity, UpdateMode } from '@readagent/core';
 import type { AgentEvent } from './events.js';
 import { toAgentEvents } from './events.js';
 import { createNoteToolServer, type NoteRecorder, type NoteToolContext } from './notes.js';
 import {
   buildSelectionPrompt,
+  GRANULARITY_GUIDANCE,
   type PromptBudget,
   type SelectionContext,
   SYSTEM_PROMPT,
@@ -30,6 +31,7 @@ export type QueryFn = (params: { prompt: string; options?: Options }) => AsyncIt
 
 export interface NoteIntegration {
   readonly updateMode: UpdateMode;
+  readonly granularity: Granularity;
   readonly recorder: NoteRecorder;
   readonly context: NoteToolContext;
 }
@@ -63,9 +65,15 @@ export async function* askAboutSelection(options: AskOptions): AsyncGenerator<Ag
       })
     : null;
 
+  // ノートを書ける場合だけ、粒度の指示を足す。書けないのに粒度を語っても意味がない
+  const systemPrompt =
+    noteServer && notes
+      ? `${SYSTEM_PROMPT}\n\nノートを残すときの粒度: ${GRANULARITY_GUIDANCE[notes.granularity]}`
+      : SYSTEM_PROMPT;
+
   const sdkOptions: Options = {
     abortController: controller,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt,
     allowedTools: [...ALLOWED_TOOLS, ...(noteServer ? [noteServer.toolId] : [])],
     includePartialMessages: true, // ストリーミング表示に必要
     maxTurns: 8,

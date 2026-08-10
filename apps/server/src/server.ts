@@ -98,6 +98,12 @@ export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server
         return page ? json(200, page) : json(404, { error: 'page not found' });
       }
 
+      if (url.pathname === '/api/notes') {
+        // ノートペインは読書中いつでも開ける（要件 4）。無ければ空で返す
+        const markdown = notes ? await notes.read() : '';
+        return json(200, { markdown });
+      }
+
       if (url.pathname === '/api/chat' && req.method === 'POST') {
         const parsed = parseChatRequest(await readJsonBody(req));
         if ('error' in parsed) return json(400, parsed);
@@ -112,7 +118,7 @@ export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server
         const controller = new AbortController();
         res.on('close', () => controller.abort());
 
-        const { context, budget, noteContext, updateMode } = buildContext(
+        const { context, budget, noteContext, updateMode, granularity } = buildContext(
           pageText,
           parsed,
           noteConfig,
@@ -123,7 +129,9 @@ export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server
             context,
             budget,
             signal: controller.signal,
-            ...(notes ? { notes: { updateMode, recorder: notes, context: noteContext } } : {}),
+            ...(notes
+              ? { notes: { updateMode, granularity, recorder: notes, context: noteContext } }
+              : {}),
           }),
         );
       }

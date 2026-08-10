@@ -3,11 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "読書ノート（Markdown）の組み立てと永続化",
+  "description": "\u8aad\u66f8\u30ce\u30fc\u30c8\uff08Markdown\uff09\u306e\u7d44\u307f\u7acb\u3066\u3068\u6c38\u7d9a\u5316",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown.d.ts",
+      "default": "./dist/markdown.js"
     }
   },
   "main": "./dist/index.js",

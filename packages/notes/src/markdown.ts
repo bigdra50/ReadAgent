@@ -89,3 +89,66 @@ export function appendEntry(existing: string, entry: NoteEntryDraft, bookTitle?:
       : '';
   return `${base}${renderEntry(entry)}`;
 }
+
+export interface ParsedNoteEntry {
+  readonly anchor: NoteAnchor;
+  /** `## ` 見出しの本文（ページ表記を除いた部分） */
+  readonly heading: string;
+  readonly quote: string;
+  /** 引用より後の本文。時刻とアンカーは取り除いてある */
+  readonly body: string;
+  /** 記録した時刻（ISO 8601）。書式が違えば undefined */
+  readonly createdAt?: string;
+}
+
+/**
+ * ノートを読み返し用の構造に戻す。
+ * ノート → 本文のジャンプ（要件 3.3 の双方向リンク）に使う。
+ *
+ * 手で編集されている前提で、解析できない部分は落として先に進む。
+ * 1エントリの崩れでノート全体が読めなくなるほうが困る。
+ */
+export function parseEntries(markdown: string): ParsedNoteEntry[] {
+  const entries: ParsedNoteEntry[] = [];
+  const sections = markdown.split(/^## /m).slice(1);
+
+  for (const section of sections) {
+    const anchors = parseAnchors(section);
+    const anchor = anchors[0];
+    if (!anchor) continue; // アンカーが無いものは本文へ戻れないので対象外
+
+    const lines = section.split('\n');
+    const rawHeading = lines[0] ?? '';
+    const heading = rawHeading.replace(/^p\.\d+\s*/, '').trim();
+
+    const quoteLines: string[] = [];
+    const bodyLines: string[] = [];
+    let seenQuote = false;
+
+    for (const line of lines.slice(1)) {
+      if (line.startsWith('>')) {
+        seenQuote = true;
+        quoteLines.push(line.replace(/^>\s?/, ''));
+      } else if (seenQuote) {
+        bodyLines.push(line);
+      }
+    }
+
+    const rawBody = bodyLines.join('\n');
+    const createdAt = /<sub>([^<]+)<\/sub>/.exec(rawBody)?.[1]?.trim();
+
+    entries.push({
+      anchor,
+      heading,
+      quote: quoteLines.join('\n').trim(),
+      // 時刻とアンカーは表示用の本文から外す。読み返すときに邪魔になる
+      body: rawBody
+        .replace(/<sub>[\s\S]*?<\/sub>/g, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .trim(),
+      ...(createdAt ? { createdAt } : {}),
+    });
+  }
+
+  return entries;
+}

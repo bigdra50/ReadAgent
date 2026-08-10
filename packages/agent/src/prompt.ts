@@ -1,3 +1,5 @@
+import type { Granularity } from '@readagent/core';
+
 /**
  * 選択範囲からエージェントへの問いかけを組み立てる。
  *
@@ -21,6 +23,21 @@ export interface SelectionContext {
 export interface PromptBudget {
   readonly maxContextChars: number;
 }
+
+/**
+ * ノートの粒度（要件 3.4 の granularity）をエージェントへの指示に変える。
+ *
+ * 粒度はノートの「書き方」の指示として扱う。エントリの構造そのものを
+ * 変える（節ごとに1エントリへ統合する等）実装は入れていない。
+ * 要件が粒度の意味を定義していないため、まずは指示として渡し、
+ * 実際に読んでみて必要になった構造だけを後から足す。
+ */
+export const GRANULARITY_GUIDANCE: Record<Granularity, string> = {
+  'per-question': '質問ごとに1件、その場のやり取りが分かる粒度で残す。',
+  'per-section': '節の単位でまとめる。同じ節の話題は細かく分けず、要点を束ねて残す。',
+  free: '粒度は内容に応じて決めてよい。残す価値がないと判断したら書かなくてよい。',
+  summary: '細かい記録は避け、後から通読して意味のある要約だけを残す。',
+};
 
 export const SYSTEM_PROMPT = [
   'あなたは技術書を読んでいる読者の相棒です。読者が選んだ箇所について、深く正確に答えます。',

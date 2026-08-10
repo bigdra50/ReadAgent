@@ -35,7 +35,8 @@ const rules = [
     message: 'ホーム/ルート配下の再帰削除は危険です。対象パスを限定してください。',
   },
   {
-    pattern: /(^|[;&|\n]\s*)(cat|less|head|tail|grep)\s+[^|;&]*\.env(\s|$|\.)/,
+    pattern:
+      /(^|[;&|\n]\s*)(cat|less|head|tail|grep)\s+[^|;&]*\.env(?!\.example|\.sample|\.template)(\s|$|\.)/,
     message: '.env は秘匿情報です。必要な変数名は .env.example を参照してください。',
   },
 ];

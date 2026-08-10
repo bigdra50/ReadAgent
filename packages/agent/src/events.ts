@@ -30,41 +30,41 @@ const asString = (value: unknown): string | null => (typeof value === 'string' ?
 
 /** 本文の差分（content_block_delta / text_delta）だけを拾う */
 function textEvents(event: unknown): AgentEvent[] {
-  if (!isRecord(event) || event['type'] !== 'content_block_delta') return [];
-  const delta = event['delta'];
-  if (!isRecord(delta) || delta['type'] !== 'text_delta') return [];
-  const text = asString(delta['text']);
+  if (!isRecord(event) || event.type !== 'content_block_delta') return [];
+  const delta = event.delta;
+  if (!isRecord(delta) || delta.type !== 'text_delta') return [];
+  const text = asString(delta.text);
   return text ? [{ type: 'text', text }] : [];
 }
 
 function contentBlocks(message: unknown): readonly unknown[] {
   if (!isRecord(message)) return [];
-  const content = message['content'];
+  const content = message.content;
   return Array.isArray(content) ? content : [];
 }
 
 function toolStartEvents(message: unknown): AgentEvent[] {
   return contentBlocks(message).flatMap((block) => {
-    if (!isRecord(block) || block['type'] !== 'tool_use') return [];
-    const id = asString(block['id']);
-    const name = asString(block['name']);
+    if (!isRecord(block) || block.type !== 'tool_use') return [];
+    const id = asString(block.id);
+    const name = asString(block.name);
     return id && name ? [{ type: 'tool-start' as const, id, name }] : [];
   });
 }
 
 function toolEndEvents(message: unknown): AgentEvent[] {
   return contentBlocks(message).flatMap((block) => {
-    if (!isRecord(block) || block['type'] !== 'tool_result') return [];
-    const id = asString(block['tool_use_id']);
-    return id ? [{ type: 'tool-end' as const, id, ok: block['is_error'] !== true }] : [];
+    if (!isRecord(block) || block.type !== 'tool_result') return [];
+    const id = asString(block.tool_use_id);
+    return id ? [{ type: 'tool-end' as const, id, ok: block.is_error !== true }] : [];
   });
 }
 
 function resultEvent(message: Record_): AgentEvent {
-  if (message['subtype'] === 'success' && message['is_error'] !== true) {
+  if (message.subtype === 'success' && message.is_error !== true) {
     return { type: 'done', ok: true };
   }
-  return { type: 'done', ok: false, error: describeResultError(message['subtype']) };
+  return { type: 'done', ok: false, error: describeResultError(message.subtype) };
 }
 
 function describeResultError(subtype: unknown): string {
@@ -84,14 +84,14 @@ function describeResultError(subtype: unknown): string {
 export function toAgentEvents(message: unknown): AgentEvent[] {
   if (!isRecord(message)) return [];
 
-  switch (message['type']) {
+  switch (message.type) {
     case 'stream_event':
-      return textEvents(message['event']);
+      return textEvents(message.event);
     // 完成した本文は stream_event 側で流し済みなので、ここではツールの開始だけを拾う
     case 'assistant':
-      return toolStartEvents(message['message']);
+      return toolStartEvents(message.message);
     case 'user':
-      return toolEndEvents(message['message']);
+      return toolEndEvents(message.message);
     case 'result':
       return [resultEvent(message)];
     default:

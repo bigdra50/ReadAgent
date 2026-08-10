@@ -259,3 +259,45 @@ describe('ノート連携', () => {
     );
   });
 });
+
+describe('GET /api/notes', () => {
+  it('ノート全文を返す', async () => {
+    const store = createMemoryNoteStore();
+    await store.append({
+      anchor: { page: 1, start: 0, end: 3 },
+      quote: '引用',
+      createdAt: '2026-08-10T00:00:00.000Z',
+    });
+
+    const server = createReadAgentServer({
+      loadDocument: () => Promise.resolve(loaded),
+      notes: store,
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/notes`);
+    const body = (await response.json()) as { markdown: string };
+
+    expect(response.status).toBe(200);
+    expect(body.markdown).toContain('引用');
+
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+
+  it('ノートの保存先が無ければ空を返す', async () => {
+    const server = createReadAgentServer({ loadDocument: () => Promise.resolve(loaded) });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/notes`);
+
+    await expect(response.json()).resolves.toEqual({ markdown: '' });
+
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+});

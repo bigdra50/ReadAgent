@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { appendEntry, parseAnchors, renderAnchor, renderEntry } from '../src/markdown.js';
+import {
+  appendEntry,
+  parseAnchors,
+  parseEntries,
+  renderAnchor,
+  renderEntry,
+} from '../src/markdown.js';
 
 const entry = {
   anchor: { page: 12, start: 100, end: 140 },
@@ -107,5 +113,67 @@ describe('appendEntry', () => {
     note = appendEntry(note, { ...entry, anchor: { page: 14, start: 5, end: 9 } });
 
     expect(parseAnchors(note)).toHaveLength(3);
+  });
+});
+
+describe('parseEntries', () => {
+  const build = () => {
+    let note = appendEntry('', entry, '本');
+    note = appendEntry(note, {
+      anchor: { page: 20, start: 5, end: 9 },
+      quote: '二件目の引用',
+      question: '二件目の質問',
+      answer: '二件目の回答',
+      createdAt: '2026-08-10T01:00:00.000Z',
+    });
+    return note;
+  };
+
+  it('エントリをアンカーつきで取り出す', () => {
+    const entries = parseEntries(build());
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.anchor).toEqual({ page: 12, start: 100, end: 140 });
+    expect(entries[1]?.anchor).toEqual({ page: 20, start: 5, end: 9 });
+  });
+
+  it('見出しからページ表記を落とす', () => {
+    expect(parseEntries(build())[0]?.heading).toBe('なぜガードが要る？');
+  });
+
+  it('引用と本文を分ける', () => {
+    const parsed = parseEntries(build())[1];
+
+    expect(parsed?.quote).toBe('二件目の引用');
+    expect(parsed?.body).toContain('二件目の回答');
+    expect(parsed?.body).not.toContain('readagent:anchor');
+  });
+
+  it('時刻は本文から外して取り出す（読み返すときに邪魔になる）', () => {
+    const parsed = parseEntries(build())[1];
+
+    expect(parsed?.createdAt).toBe('2026-08-10T01:00:00.000Z');
+    expect(parsed?.body).not.toContain('<sub>');
+    expect(parsed?.body).not.toContain('2026-08-10T01:00:00.000Z');
+  });
+
+  it('複数行の引用を復元する', () => {
+    const note = appendEntry('', { ...entry, quote: '一行目\n二行目' });
+
+    expect(parseEntries(note)[0]?.quote).toBe('一行目\n二行目');
+  });
+
+  it('アンカーが無い節は飛ばす（手書きのメモを壊さない）', () => {
+    const note = `# ノート\n\n## 自分で書いた見出し\n\n本文\n\n${renderEntry(entry)}`;
+
+    const entries = parseEntries(note);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.heading).toBe('なぜガードが要る？');
+  });
+
+  it('エントリが無ければ空を返す', () => {
+    expect(parseEntries('')).toEqual([]);
+    expect(parseEntries('# 見出しだけ')).toEqual([]);
   });
 });

@@ -56,6 +56,9 @@ importers:
       '@readagent/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@readagent/notes':
+        specifier: workspace:*
+        version: link:../../packages/notes
       '@readagent/pdf':
         specifier: workspace:*
         version: link:../../packages/pdf

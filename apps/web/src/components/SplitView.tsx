@@ -4,6 +4,9 @@ interface Props {
   readonly toc: ReactNode;
   readonly reader: ReactNode;
   readonly side: ReactNode;
+  readonly showToc: boolean;
+  readonly showSide: boolean;
+  readonly onDismiss: (pane: 'toc' | 'side') => void;
 }
 
 const MIN_PANE = 160;
@@ -32,8 +35,7 @@ function Divider({ label, width, max, onResize, onDrag }: DividerProps) {
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         event.preventDefault();
-        const delta = event.key === 'ArrowLeft' ? -KEYBOARD_STEP : KEYBOARD_STEP;
-        onResize(width + delta);
+        onResize(width + (event.key === 'ArrowLeft' ? -KEYBOARD_STEP : KEYBOARD_STEP));
       }}
     />
   );
@@ -41,11 +43,14 @@ function Divider({ label, width, max, onResize, onDrag }: DividerProps) {
 
 /**
  * リサイズ可能な3ペイン（要件 4）。
- * 狭い画面へのフォールバック（スタック・オーバーレイ）は Phase 3 で扱う。
+ *
+ * 広い画面では同時に並べ、狭い画面では本文だけを残して
+ * 目次とサイドをオーバーレイに落とす。切り替えは CSS 側で行い、
+ * ここでは「表示するかどうか」だけを扱う。
  */
-export function SplitView({ toc, reader, side }: Props) {
+export function SplitView({ toc, reader, side, showToc, showSide, onDismiss }: Props) {
   const [tocWidth, setTocWidth] = useState(240);
-  const [sideWidth, setSideWidth] = useState(320);
+  const [sideWidth, setSideWidth] = useState(340);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const clamp = useCallback((value: number) => {
@@ -80,29 +85,58 @@ export function SplitView({ toc, reader, side }: Props) {
     ? rootRef.current.getBoundingClientRect().width - MIN_PANE * 2
     : MIN_PANE;
 
+  // 幅は CSS 変数で渡す。列の組み立てを CSS 側に置くことで、
+  // 狭い画面では通常のルールで上書きできる（インラインの style だと !important が要る）
+  const style = {
+    '--toc-width': showToc ? `${tocWidth}px` : '0px',
+    '--toc-divider': showToc ? '4px' : '0px',
+    '--side-divider': showSide ? '4px' : '0px',
+    '--side-width': showSide ? `${sideWidth}px` : '0px',
+  } as React.CSSProperties;
+
   return (
-    <div
-      className="split"
-      ref={rootRef}
-      style={{ gridTemplateColumns: `${tocWidth}px 4px 1fr 4px ${sideWidth}px` }}
-    >
-      <aside className="pane pane-toc">{toc}</aside>
-      <Divider
-        label="目次ペインの幅"
-        width={tocWidth}
-        max={max}
-        onResize={(value) => setTocWidth(clamp(value))}
-        onDrag={startDrag('toc')}
-      />
+    <div className="split" ref={rootRef} style={style}>
+      <aside className="pane pane-toc" data-open={showToc} aria-hidden={!showToc}>
+        {toc}
+      </aside>
+      {showToc ? (
+        <Divider
+          label="目次ペインの幅"
+          width={tocWidth}
+          max={max}
+          onResize={(value) => setTocWidth(clamp(value))}
+          onDrag={startDrag('toc')}
+        />
+      ) : (
+        <div />
+      )}
+
       <main className="pane pane-reader">{reader}</main>
-      <Divider
-        label="サイドペインの幅"
-        width={sideWidth}
-        max={max}
-        onResize={(value) => setSideWidth(clamp(value))}
-        onDrag={startDrag('side')}
-      />
-      <aside className="pane pane-side">{side}</aside>
+
+      {showSide ? (
+        <Divider
+          label="サイドペインの幅"
+          width={sideWidth}
+          max={max}
+          onResize={(value) => setSideWidth(clamp(value))}
+          onDrag={startDrag('side')}
+        />
+      ) : (
+        <div />
+      )}
+      <aside className="pane pane-side" data-open={showSide} aria-hidden={!showSide}>
+        {side}
+      </aside>
+
+      {/* 狭い画面ではペインがオーバーレイになる。外側を触ると閉じる */}
+      {(showToc || showSide) && (
+        <button
+          type="button"
+          className="scrim"
+          aria-label="ペインを閉じる"
+          onClick={() => onDismiss(showSide ? 'side' : 'toc')}
+        />
+      )}
     </div>
   );
 }
