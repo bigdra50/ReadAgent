@@ -11,6 +11,8 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { type AgentEvent, askAboutSelection } from '@readagent/agent';
+import type { PartialNoteConfig } from '@readagent/core';
+import type { NoteStore } from '@readagent/notes';
 import { type ExtractedDocument, extractDocument } from '@readagent/pdf';
 import { buildContext, parseChatRequest, streamEvents } from './chat.js';
 
@@ -37,18 +39,21 @@ export function createFileDocumentLoader(pdfPath: string): DocumentLoader {
   };
 }
 
-/** 選択範囲を起点にエージェントへ問い合わせる関数。テストでは差し替える */
-export type AskFn = (input: {
-  context: Parameters<typeof askAboutSelection>[0]['context'];
-  budget: Parameters<typeof askAboutSelection>[0]['budget'];
-  signal: AbortSignal;
-}) => AsyncIterable<AgentEvent>;
+type AskInput = Pick<Parameters<typeof askAboutSelection>[0], 'context' | 'budget' | 'notes'> & {
+  readonly signal: AbortSignal;
+};
 
-const defaultAsk: AskFn = ({ context, budget, signal }) =>
-  askAboutSelection({ context, budget, signal });
+/** 選択範囲を起点にエージェントへ問い合わせる関数。テストでは差し替える */
+export type AskFn = (input: AskInput) => AsyncIterable<AgentEvent>;
+
+const defaultAsk: AskFn = (input) => askAboutSelection(input);
 
 export interface ServerDeps {
   readonly loadDocument: DocumentLoader;
+  /** ノートの保存先。省略するとノートを更新しない */
+  readonly notes?: NoteStore;
+  /** ノート設定の上書き。既定値は resolveNoteConfig が持つ */
+  readonly noteConfig?: PartialNoteConfig;
   readonly ask?: AskFn;
 }
 
@@ -66,8 +71,8 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 }
 
 export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server {
-  const { loadDocument, ask = defaultAsk } =
-    typeof deps === 'function' ? { loadDocument: deps, ask: defaultAsk } : deps;
+  const resolved: ServerDeps = typeof deps === 'function' ? { loadDocument: deps } : deps;
+  const { loadDocument, notes, noteConfig, ask = defaultAsk } = resolved;
 
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${HOST}`);
@@ -107,8 +112,20 @@ export function createReadAgentServer(deps: ServerDeps | DocumentLoader): Server
         const controller = new AbortController();
         res.on('close', () => controller.abort());
 
-        const { context, budget } = buildContext(pageText, parsed);
-        return streamEvents(res, ask({ context, budget, signal: controller.signal }));
+        const { context, budget, noteContext, updateMode } = buildContext(
+          pageText,
+          parsed,
+          noteConfig,
+        );
+        return streamEvents(
+          res,
+          ask({
+            context,
+            budget,
+            signal: controller.signal,
+            ...(notes ? { notes: { updateMode, recorder: notes, context: noteContext } } : {}),
+          }),
+        );
       }
 
       if (url.pathname === '/api/document/file') {

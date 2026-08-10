@@ -10,6 +10,7 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/pdf" },
+    { "path": "../../packages/notes" },
     { "path": "../../packages/agent" }
   ]
 }

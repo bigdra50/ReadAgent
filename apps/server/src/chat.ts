@@ -7,7 +7,7 @@
  */
 import type { ServerResponse } from 'node:http';
 import type { AgentEvent } from '@readagent/agent';
-import { resolveNoteConfig } from '@readagent/core';
+import { type PartialNoteConfig, resolveNoteConfig } from '@readagent/core';
 import { type PageText, renderQuote, sliceRange } from '@readagent/pdf';
 
 /** 選択の前後から拾う文脈の量。予算の残りに収まる範囲で使う */
@@ -42,18 +42,35 @@ export function parseChatRequest(body: unknown): ChatRequest | { error: string }
   };
 }
 
-/** 選択範囲から、エージェントへ渡す文脈を組み立てる */
-export function buildContext(pageText: PageText, request: ChatRequest) {
-  const config = resolveNoteConfig();
+/**
+ * 選択範囲から、エージェントへ渡す文脈とノート用の文脈を組み立てる。
+ * 設定は「グローバル → 書籍 → スコープ」の解決結果を受け取る（要件 3.4）。
+ * 現状はサーバー起動時の1層だけを渡している。書籍ごとの設定は Phase 3。
+ */
+export function buildContext(
+  pageText: PageText,
+  request: ChatRequest,
+  overrides?: PartialNoteConfig,
+) {
+  const config = resolveNoteConfig(overrides);
+  const quote = renderQuote(pageText, request.start, request.end);
+
   return {
     context: {
       page: request.page,
-      quote: renderQuote(pageText, request.start, request.end),
+      quote,
       before: sliceRange(pageText, request.start - CONTEXT_CHARS, request.start),
       after: sliceRange(pageText, request.end, request.end + CONTEXT_CHARS),
       ...(request.question ? { question: request.question } : {}),
     },
     budget: { maxContextChars: config.maxContextChars },
+    // ノートに残す引用も、エージェントの出力ではなく本文から切り出したものを使う
+    noteContext: {
+      anchor: { page: request.page, start: request.start, end: request.end },
+      quote,
+      ...(request.question ? { question: request.question } : {}),
+    },
+    updateMode: config.updateMode,
   };
 }
 
