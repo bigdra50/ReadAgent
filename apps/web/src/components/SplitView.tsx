@@ -1,4 +1,5 @@
-import { type ReactNode, useCallback, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useRef } from 'react';
+import { isPaneWidths, type PaneWidths, usePersistentState } from '../lib/preferences';
 
 interface Props {
   readonly toc: ReactNode;
@@ -49,8 +50,13 @@ function Divider({ label, width, max, onResize, onDrag }: DividerProps) {
  * ここでは「表示するかどうか」だけを扱う。
  */
 export function SplitView({ toc, reader, side, showToc, showSide, onDismiss }: Props) {
-  const [tocWidth, setTocWidth] = useState(240);
-  const [sideWidth, setSideWidth] = useState(340);
+  // 幅は端末ごとの好みなので保存する（ADR-0010）
+  const [widths, setWidths] = usePersistentState<PaneWidths>(
+    'pane-widths',
+    { toc: 240, side: 340 },
+    isPaneWidths,
+  );
+  const { toc: tocWidth, side: sideWidth } = widths;
   const rootRef = useRef<HTMLDivElement>(null);
 
   const clamp = useCallback((value: number) => {
@@ -59,17 +65,23 @@ export function SplitView({ toc, reader, side, showToc, showSide, onDismiss }: P
     return Math.max(MIN_PANE, Math.min(value, max));
   }, []);
 
+  const resize = useCallback(
+    (which: 'toc' | 'side', value: number) => {
+      setWidths((current) => ({ ...current, [which]: clamp(value) }));
+    },
+    [clamp, setWidths],
+  );
+
   const startDrag = useCallback(
     (which: 'toc' | 'side') => (event: React.PointerEvent<HTMLHRElement>) => {
       event.preventDefault();
       const move = (moveEvent: PointerEvent) => {
         const bounds = rootRef.current?.getBoundingClientRect();
         if (!bounds) return;
-        const next =
-          which === 'toc' ? moveEvent.clientX - bounds.left : bounds.right - moveEvent.clientX;
-        const width = clamp(next);
-        if (which === 'toc') setTocWidth(width);
-        else setSideWidth(width);
+        resize(
+          which,
+          which === 'toc' ? moveEvent.clientX - bounds.left : bounds.right - moveEvent.clientX,
+        );
       };
       const stop = () => {
         window.removeEventListener('pointermove', move);
@@ -78,7 +90,7 @@ export function SplitView({ toc, reader, side, showToc, showSide, onDismiss }: P
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', stop);
     },
-    [clamp],
+    [resize],
   );
 
   const max = rootRef.current
@@ -104,7 +116,7 @@ export function SplitView({ toc, reader, side, showToc, showSide, onDismiss }: P
           label="目次ペインの幅"
           width={tocWidth}
           max={max}
-          onResize={(value) => setTocWidth(clamp(value))}
+          onResize={(value) => resize('toc', value)}
           onDrag={startDrag('toc')}
         />
       ) : (
@@ -118,7 +130,7 @@ export function SplitView({ toc, reader, side, showToc, showSide, onDismiss }: P
           label="サイドペインの幅"
           width={sideWidth}
           max={max}
-          onResize={(value) => setSideWidth(clamp(value))}
+          onResize={(value) => resize('side', value)}
           onDrag={startDrag('side')}
         />
       ) : (
