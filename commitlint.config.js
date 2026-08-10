@@ -11,7 +11,20 @@ export default {
     'scope-enum': [
       1,
       'always',
-      ['core', 'agent', 'notes', 'server', 'web', 'config', 'docs', 'adr', 'ci', 'harness', 'deps'],
+      [
+        'core',
+        'pdf',
+        'agent',
+        'notes',
+        'server',
+        'web',
+        'config',
+        'docs',
+        'adr',
+        'ci',
+        'harness',
+        'deps',
+      ],
     ],
   },
 };
