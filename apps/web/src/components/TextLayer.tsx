@@ -13,7 +13,7 @@ interface Props {
   readonly page: PDFPageProxy;
   readonly pageNumber: number;
   readonly scale: number;
-  readonly onSelect: (range: SelectionRange | null) => void;
+  readonly onSelect: (range: SelectionRange) => void;
 }
 
 /**
@@ -62,23 +62,21 @@ export function TextLayer({ page, pageNumber, scale, onSelect }: Props) {
 
       const handleSelection = () => {
         const selection = document.getSelection();
-        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-          onSelectRef.current(null);
-          return;
-        }
+        // 選択が消えても直前の選択を保持する。質問欄にフォーカスを移した時点で
+        // ブラウザの選択は解除されるため、ここで null にすると質問できなくなる。
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+
         const range = selection.getRangeAt(0);
         const from = nodes.indexOf(range.startContainer as Text);
         const to = nodes.indexOf(range.endContainer as Text);
-        if (from < 0 || to < 0) {
-          onSelectRef.current(null);
-          return;
-        }
+        // 本文の外での選択は、この本文ペインの選択ではない
+        if (from < 0 || to < 0) return;
         const offsets = toRange(
           anchors,
           { index: from, offset: range.startOffset },
           { index: to, offset: range.endOffset },
         );
-        onSelectRef.current(offsets ? { page: pageNumber, ...offsets } : null);
+        if (offsets) onSelectRef.current({ page: pageNumber, ...offsets });
       };
 
       document.addEventListener('selectionchange', handleSelection);
