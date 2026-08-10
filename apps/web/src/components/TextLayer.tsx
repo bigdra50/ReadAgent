@@ -1,7 +1,7 @@
 import type { PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { Util } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { useEffect, useRef } from 'react';
-import { buildAnchors, toRange } from '../lib/anchors';
+import { buildAnchors, locateOffset, toRange } from '../lib/anchors';
 
 export interface SelectionRange {
   readonly page: number;
@@ -14,6 +14,8 @@ interface Props {
   readonly pageNumber: number;
   readonly scale: number;
   readonly onSelect: (range: SelectionRange) => void;
+  /** ノートから戻ってきたときに復元する範囲（要件 3.3 の双方向リンク） */
+  readonly highlight?: SelectionRange | null;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * span を state で持つと選択のたびに再描画が走り、ブラウザの選択が壊れる。
  * 構築は useEffect の中だけで行い、React には中身を触らせない。
  */
-export function TextLayer({ page, pageNumber, scale, onSelect }: Props) {
+export function TextLayer({ page, pageNumber, scale, onSelect, highlight }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
@@ -82,6 +84,23 @@ export function TextLayer({ page, pageNumber, scale, onSelect }: Props) {
       document.addEventListener('selectionchange', handleSelection);
       container.dataset.ready = '1';
       cleanup = () => document.removeEventListener('selectionchange', handleSelection);
+
+      // ノートから戻ってきた場合は、保存されたオフセットから選択を組み直す
+      if (highlight && highlight.page === pageNumber) {
+        const from = locateOffset(anchors, highlight.start, 'start');
+        const to = locateOffset(anchors, highlight.end, 'end');
+        const startNode = from ? nodes[from.index] : undefined;
+        const endNode = to ? nodes[to.index] : undefined;
+        if (from && to && startNode && endNode) {
+          const range = document.createRange();
+          range.setStart(startNode, from.offset);
+          range.setEnd(endNode, to.offset);
+          const selection = document.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          startNode.parentElement?.scrollIntoView({ block: 'center' });
+        }
+      }
     })();
 
     return () => {
@@ -90,7 +109,7 @@ export function TextLayer({ page, pageNumber, scale, onSelect }: Props) {
       container.replaceChildren();
       delete container.dataset.ready;
     };
-  }, [page, pageNumber, scale]);
+  }, [page, pageNumber, scale, highlight]);
 
   return <div ref={containerRef} className="text-layer" />;
 }

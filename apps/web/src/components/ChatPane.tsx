@@ -6,6 +6,9 @@ import type { SelectionRange } from './TextLayer';
 interface Props {
   readonly selection: SelectionRange | null;
   readonly quote: string | null;
+  /** ノート更新の状態。ヘッダーに控えめに出す（要件 4） */
+  readonly onNoteStatus: (status: 'idle' | 'updating' | 'failed') => void;
+  readonly onNoteUpdated: () => void;
 }
 
 interface ToolRun {
@@ -18,7 +21,7 @@ interface ToolRun {
  * 選択箇所を起点にした深掘りチャット（要件 3.2）。
  * 走っている問い合わせは常に中断できる。読書を止めないことが前提のため（要件 5）。
  */
-export function ChatPane({ selection, quote }: Props) {
+export function ChatPane({ selection, quote, onNoteStatus, onNoteUpdated }: Props) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [tools, setTools] = useState<ToolRun[]>([]);
@@ -29,27 +32,41 @@ export function ChatPane({ selection, quote }: Props) {
   // 画面を離れるときに走っている問い合わせを残さない
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  const applyEvent = useCallback((event: AgentEvent) => {
-    switch (event.type) {
-      case 'text':
-        setAnswer((current) => current + event.text);
-        break;
-      case 'tool-start':
-        setTools((current) => [...current, { id: event.id, name: event.name, state: 'running' }]);
-        break;
-      case 'tool-end':
-        setTools((current) =>
-          current.map((tool) =>
-            tool.id === event.id ? { ...tool, state: event.ok ? 'done' : 'failed' } : tool,
-          ),
-        );
-        break;
-      case 'done':
-        setStatus(event.ok ? 'idle' : 'error');
-        if (!event.ok) setError(event.error ?? '応答を完了できませんでした');
-        break;
-    }
-  }, []);
+  const applyEvent = useCallback(
+    (event: AgentEvent) => {
+      switch (event.type) {
+        case 'text':
+          setAnswer((current) => current + event.text);
+          break;
+        case 'tool-start':
+          setTools((current) => [...current, { id: event.id, name: event.name, state: 'running' }]);
+          break;
+        case 'tool-end':
+          setTools((current) =>
+            current.map((tool) =>
+              tool.id === event.id ? { ...tool, state: event.ok ? 'done' : 'failed' } : tool,
+            ),
+          );
+          break;
+        case 'done':
+          setStatus(event.ok ? 'idle' : 'error');
+          if (!event.ok) setError(event.error ?? '応答を完了できませんでした');
+          break;
+        case 'note-start':
+          onNoteStatus('updating');
+          break;
+        case 'note-updated':
+          onNoteStatus('idle');
+          onNoteUpdated();
+          break;
+        case 'note-failed':
+          onNoteStatus('failed');
+          setError(`ノートを更新できませんでした: ${event.error}`);
+          break;
+      }
+    },
+    [onNoteStatus, onNoteUpdated],
+  );
 
   const ask = useCallback(async () => {
     if (!selection) return;
@@ -61,6 +78,7 @@ export function ChatPane({ selection, quote }: Props) {
     setTools([]);
     setError(null);
     setStatus('streaming');
+    onNoteStatus('idle');
 
     try {
       const request = {
@@ -78,7 +96,7 @@ export function ChatPane({ selection, quote }: Props) {
       setStatus('error');
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [applyEvent, question, selection]);
+  }, [applyEvent, onNoteStatus, question, selection]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
