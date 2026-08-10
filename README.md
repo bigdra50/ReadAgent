@@ -6,9 +6,9 @@
 全文をAIに渡すのではなく、**選択範囲を起点にエージェントがツールを使って調査・整理する**
 「エージェント寄り」の読書体験を目指しています。
 
-> **状態: Phase 0（ハーネス整備）完了。** アプリケーション本体はこれからです。
-> 現在あるのは開発基盤（CI・検証コマンド・エージェント用ハーネス）と、
-> ドメインモデル・設定解決の最小実装のみです。
+> **状態: Phase 1 の骨格まで。** PDFを開いて本文を選択し、
+> その範囲がページ内オフセットとして取れるところまで動きます。
+> Claude Agent との対話と読書ノートはこれからです（[docs/roadmap.md](docs/roadmap.md)）。
 
 ## 必要環境
 
@@ -21,6 +21,21 @@
 pnpm install   # 依存の取得と Git フックの登録まで行われます
 pnpm run verify
 ```
+
+## 動かす
+
+端末を2つ使います。
+
+```bash
+pnpm run build                                   # ワークスペースをビルド
+pnpm --filter @readagent/server start <path.pdf> # ローカルサーバー (127.0.0.1:5174)
+pnpm --filter @readagent/web dev                 # 読書UI (127.0.0.1:5173)
+```
+
+ブラウザで <http://127.0.0.1:5173> を開くと、目次・本文・選択範囲の3ペインが出ます。
+本文を選択すると、右ペインに引用とページ内オフセットが表示されます。
+
+サーバーは `127.0.0.1` にのみバインドします。認証が入るまで外に出さないでください（[ADR-0004](docs/adr/0004-runtime-shell.md)）。
 
 ## コマンド
 
@@ -38,6 +53,9 @@ pnpm run verify
 
 ```
 packages/core   ドメインモデル・設定の階層解決（UI / SDK / fs に非依存）
+packages/pdf    PDFのテキスト抽出と引用の組み立て
+apps/server     ローカルHTTPサーバー
+apps/web        読書UI（React + Vite）
 docs/           要件・アーキテクチャ・ロードマップ・ADR
 .claude/        Claude Code 用ハーネス（hooks / commands / agents）
 .github/        CI と Claude Code Action
@@ -51,6 +69,7 @@ docs/           要件・アーキテクチャ・ロードマップ・ADR
 | [docs/architecture.md](docs/architecture.md) | レイヤ構成と未決定事項 |
 | [docs/roadmap.md](docs/roadmap.md) | フェーズごとのタスク |
 | [docs/agentic-workflow.md](docs/agentic-workflow.md) | エージェンティック開発の進め方 |
+| [docs/spike-pdf-text-anchor.md](docs/spike-pdf-text-anchor.md) | 選択位置の指定方法の実測結果 |
 | [docs/adr/](docs/adr/) | アーキテクチャ上の決定記録 |
 | [CLAUDE.md](CLAUDE.md) | Claude Code 向けのプロジェクト規約 |
 
