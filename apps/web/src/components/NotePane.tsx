@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import type { ChapterRange } from '@readagent/core';
+import { collectTags } from '@readagent/notes/markdown';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { streamSummary } from '../lib/chat';
 import type { ParsedNoteEntry, ParsedNoteSummary } from '../lib/notes';
 import { NoteBody } from './NoteBody';
@@ -12,6 +14,8 @@ interface Props {
   readonly error: string | null;
   readonly onJump: (target: SelectionRange) => void;
   readonly onSummarized: () => void;
+  /** 目次から求めた章の範囲。ページが解決できた書籍でだけ使える */
+  readonly chapters: readonly ChapterRange[];
 }
 
 /**
@@ -29,11 +33,20 @@ export function NotePane({
   error,
   onJump,
   onSummarized,
+  chapters,
 }: Props) {
   const [summary, setSummary] = useState('');
   const [summarizing, setSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [scopeId, setScopeId] = useState('');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const tags = useMemo(() => collectTags(entries), [entries]);
+  const shown = useMemo(
+    () => (activeTag ? entries.filter((entry) => entry.tags.includes(activeTag)) : entries),
+    [entries, activeTag],
+  );
 
   /** 溜まったノートを読み直してまとめを書き足す（ADR-0009） */
   const summarize = useCallback(async () => {
@@ -45,7 +58,12 @@ export function NotePane({
     setSummarizing(true);
 
     try {
-      for await (const event of streamSummary(bookId, controller.signal)) {
+      const chapter = chapters.find((item) => item.id === scopeId);
+      const scope = chapter
+        ? { fromPage: chapter.fromPage, toPage: chapter.toPage, title: chapter.title }
+        : {};
+
+      for await (const event of streamSummary(bookId, scope, controller.signal)) {
         if (event.type === 'text') setSummary((current) => current + event.text);
         if (event.type === 'note-updated') {
           // まとめ本文はノート側に描き直されるので、途中経過は消す（同じ文章を二重に見せない）
@@ -62,7 +80,7 @@ export function NotePane({
     } finally {
       setSummarizing(false);
     }
-  }, [bookId, onSummarized]);
+  }, [bookId, chapters, onSummarized, scopeId]);
 
   return (
     <section className="notes">
@@ -70,6 +88,20 @@ export function NotePane({
 
       {entries.length > 0 && (
         <div className="ask">
+          {chapters.length > 0 && (
+            <label className="scope">
+              <span className="visually-hidden">まとめる範囲</span>
+              <select value={scopeId} onChange={(event) => setScopeId(event.target.value)}>
+                <option value="">ノート全体</option>
+                {chapters.map((chapter) => (
+                  <option key={chapter.id} value={chapter.id}>
+                    {'　'.repeat(chapter.depth)}
+                    {chapter.title}（p.{chapter.fromPage}–{chapter.toPage}）
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {summarizing ? (
             <button type="button" onClick={() => abortRef.current?.abort()}>
               中断
@@ -103,8 +135,24 @@ export function NotePane({
         </section>
       )}
 
+      {tags.length > 0 && (
+        <ul className="tag-list">
+          {tags.map(({ tag, count }) => (
+            <li key={tag}>
+              <button
+                type="button"
+                aria-pressed={activeTag === tag}
+                onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+              >
+                #{tag} <span className="muted">{count}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <ol className="note-list">
-        {entries.map((entry) => (
+        {shown.map((entry) => (
           <li key={`${entry.anchor.page}-${entry.anchor.start}-${entry.anchor.end}`}>
             <button type="button" className="note-jump" onClick={() => onJump(entry.anchor)}>
               <span className="note-page">p.{entry.anchor.page}</span>
@@ -112,6 +160,9 @@ export function NotePane({
             </button>
             <blockquote>{entry.quote}</blockquote>
             {entry.body && <NoteBody body={entry.body} />}
+            {entry.tags.length > 0 && (
+              <p className="entry-tags">{entry.tags.map((tag) => `#${tag}`).join(' ')}</p>
+            )}
           </li>
         ))}
       </ol>
