@@ -8,6 +8,9 @@
       "path": "./packages/pdf"
     },
     {
+      "path": "./packages/notes"
+    },
+    {
       "path": "./packages/agent"
     },
     {

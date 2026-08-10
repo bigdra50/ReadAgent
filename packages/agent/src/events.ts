@@ -15,7 +15,11 @@ export type AgentEvent =
   /** ツールの実行開始。要件 3.2 の「ツール実行状況の可視化」 */
   | { readonly type: 'tool-start'; readonly id: string; readonly name: string }
   | { readonly type: 'tool-end'; readonly id: string; readonly ok: boolean }
-  | { readonly type: 'done'; readonly ok: boolean; readonly error?: string };
+  | { readonly type: 'done'; readonly ok: boolean; readonly error?: string }
+  /** ノート更新の開始・完了・失敗。読書を止めずに状態だけを見せるため（要件 4） */
+  | { readonly type: 'note-start' }
+  | { readonly type: 'note-updated'; readonly path: string }
+  | { readonly type: 'note-failed'; readonly error: string };
 
 type Record_ = Readonly<Record<string, unknown>>;
 

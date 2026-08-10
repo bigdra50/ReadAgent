@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askAboutSelection, PHASE1_ALLOWED_TOOLS, type QueryFn } from '../src/ask.js';
+import { ALLOWED_TOOLS, askAboutSelection, type QueryFn } from '../src/ask.js';
 
 const textDelta = (text: string) => ({
   type: 'stream_event',
@@ -71,14 +71,14 @@ describe('askAboutSelection', () => {
 
     expect(params?.prompt).toContain('トレースを記録する');
     expect(params?.prompt).toContain('なぜ？');
-    expect(params?.options?.allowedTools).toEqual([...PHASE1_ALLOWED_TOOLS]);
+    expect(params?.options?.allowedTools).toEqual([...ALLOWED_TOOLS]);
     expect(params?.options?.includePartialMessages).toBe(true);
   });
 
-  it('ファイルシステムやシェルのツールは許可しない', async () => {
-    expect(PHASE1_ALLOWED_TOOLS).not.toContain('Bash');
-    expect(PHASE1_ALLOWED_TOOLS).not.toContain('Write');
-    expect(PHASE1_ALLOWED_TOOLS).not.toContain('Read');
+  it('ファイルシステムやシェルのツールは許可しない（ADR-0007）', () => {
+    for (const forbidden of ['Bash', 'Write', 'Edit', 'Read', 'Glob', 'Grep']) {
+      expect(ALLOWED_TOOLS).not.toContain(forbidden);
+    }
   });
 
   it('中断されたら途中で止める', async () => {

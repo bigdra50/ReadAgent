@@ -1,5 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import type { AgentEvent } from '@readagent/agent';
+import { createMemoryNoteStore } from '@readagent/notes';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildContext, parseChatRequest } from '../src/chat.js';
 import { createReadAgentServer, type LoadedDocument } from '../src/server.js';
@@ -189,6 +190,72 @@ describe('POST /api/chat', () => {
 
     await new Promise<void>((resolve, reject) =>
       failing.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+});
+
+describe('ノート連携', () => {
+  it('ノートの保存先を渡すと、エージェントに更新モードと引用を伝える', async () => {
+    const store = createMemoryNoteStore();
+    let received: { updateMode: string; quote: string; page: number } | undefined;
+
+    const server = createReadAgentServer({
+      loadDocument: () => Promise.resolve(loaded),
+      notes: store,
+      ask: (input) => {
+        const notes = input.notes;
+        if (notes) {
+          received = {
+            updateMode: notes.updateMode,
+            quote: notes.context.quote,
+            page: notes.context.anchor.page,
+          };
+        }
+        return (async function* (): AsyncGenerator<AgentEvent> {
+          yield { type: 'done', ok: true };
+        })();
+      },
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+
+    await fetch(`http://127.0.0.1:${port}/api/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ page: 1, start: 6, end: 15 }),
+    }).then((r) => r.text());
+
+    expect(received?.updateMode).toBe('agent');
+    expect(received?.quote).toBe('トレースを記録する');
+    expect(received?.page).toBe(1);
+
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+
+  it('ノートの保存先が無ければノート連携を渡さない', async () => {
+    let hadNotes = true;
+    const server = createReadAgentServer({
+      loadDocument: () => Promise.resolve(loaded),
+      ask: (input) => {
+        hadNotes = input.notes !== undefined;
+        return (async function* (): AsyncGenerator<AgentEvent> {
+          yield { type: 'done', ok: true };
+        })();
+      },
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+
+    await fetch(`http://127.0.0.1:${port}/api/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ page: 1, start: 0, end: 3 }),
+    }).then((r) => r.text());
+
+    expect(hadNotes).toBe(false);
+
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
     );
   });
 });
